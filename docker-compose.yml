@@ -36,7 +36,7 @@ services:
 
   calcom:
     container_name: calcom
-    image: ghcr.io/gimelg/calcom-custom:polls-v1
+    image: ghcr.io/gimelg/calcom-custom:polls-v2
     restart: unless-stopped
     depends_on:
       - database
