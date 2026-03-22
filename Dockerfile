@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM node:20 AS builder
+FROM --platform=$TARGETPLATFORM node:20 AS builder
 WORKDIR /calcom
 ## If we want to read any ENV variable from .env file, we need to first accept and pass it as an argument to the Dockerfile
 ARG NEXT_PUBLIC_LICENSE_CONSENT
@@ -64,9 +64,6 @@ RUN scripts/replace-placeholder.sh http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER ${N
 FROM node:20 AS runner
 WORKDIR /calcom
 RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd wget && rm -rf /var/lib/apt/lists/*
-# Force Yarn Classic in runtime so `yarn config get registry` works for Next SWC download path
-RUN corepack disable && npm i -g yarn@1.22.22
-ENV YARN_IGNORE_PATH=1 npm_config_registry=https://registry.npmjs.org
 COPY --from=builder-two /calcom ./
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
