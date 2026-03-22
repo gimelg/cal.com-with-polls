@@ -1,5 +1,6 @@
 FROM --platform=$TARGETPLATFORM node:20 AS builder
 WORKDIR /calcom
+RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 ## If we want to read any ENV variable from .env file, we need to first accept and pass it as an argument to the Dockerfile
 ARG NEXT_PUBLIC_LICENSE_CONSENT
 ARG NEXT_PUBLIC_WEBSITE_TERMS_URL
@@ -45,6 +46,7 @@ RUN yarn --cwd apps/web workspace @calcom/web run build
 RUN rm -rf node_modules/.cache .yarn/cache apps/web/.next/cache
 FROM node:20 AS builder-two
 WORKDIR /calcom
+RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NODE_ENV=production
 COPY package.json .yarnrc.yml turbo.json i18n.json ./
@@ -63,6 +65,7 @@ ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
 RUN scripts/replace-placeholder.sh http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER ${NEXT_PUBLIC_WEBAPP_URL}
 FROM node:20 AS runner
 WORKDIR /calcom
+RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd wget && rm -rf /var/lib/apt/lists/*
 COPY --from=builder-two /calcom ./
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
