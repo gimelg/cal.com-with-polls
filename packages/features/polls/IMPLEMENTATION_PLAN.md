@@ -10,6 +10,7 @@ This plan extends the current poll backend foundation into a production-ready Do
 - Poll TRPC routes are wired for authenticated organizer and public voting paths:
   - `packages/trpc/server/routers/viewer/polls/_router.ts`
   - `packages/trpc/server/routers/publicViewer/polls/_router.ts`
+- Stage 1 booking bridge is now implemented via `PollFinalizeBookingService`.
 
 ---
 
@@ -23,7 +24,7 @@ This plan extends the current poll backend foundation into a production-ready Do
 
 ---
 
-## Stage 1: Finalization-to-booking integration
+## Stage 1: Finalization-to-booking integration (completed)
 
 ### Goal
 

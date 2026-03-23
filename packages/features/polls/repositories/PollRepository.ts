@@ -47,6 +47,47 @@ const pollDetailsSelect = {
   },
 } satisfies Prisma.PollSelect;
 
+const pollFinalizeContextSelect = {
+  id: true,
+  uid: true,
+  eventTypeId: true,
+  organizerId: true,
+  timeZone: true,
+  options: {
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      position: true,
+    },
+    orderBy: {
+      position: "asc" as const,
+    },
+  },
+  participants: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+    orderBy: {
+      id: "asc" as const,
+    },
+  },
+  votes: {
+    select: {
+      pollOptionId: true,
+      participantId: true,
+      voteType: true,
+    },
+  },
+  eventType: {
+    select: {
+      locations: true,
+    },
+  },
+} satisfies Prisma.PollSelect;
+
 type CreatePollInput = {
   eventTypeId: number;
   organizerId: number;
@@ -124,6 +165,13 @@ export class PollRepository {
     });
   }
 
+  async getPollById(id: number) {
+    return await this.prismaClient.poll.findUnique({
+      where: { id },
+      select: pollDetailsSelect,
+    });
+  }
+
   async getPollByUidAndOrganizerId(uid: string, organizerId: number) {
     return await this.prismaClient.poll.findFirst({
       where: {
@@ -141,6 +189,13 @@ export class PollRepository {
         organizerId,
       },
       select: pollDetailsSelect,
+    });
+  }
+
+  async getPollFinalizeContextById(id: number) {
+    return await this.prismaClient.poll.findUnique({
+      where: { id },
+      select: pollFinalizeContextSelect,
     });
   }
 
@@ -261,4 +316,8 @@ export class PollRepository {
 
 export type PollDetails = Prisma.PollGetPayload<{
   select: typeof pollDetailsSelect;
+}>;
+
+export type PollFinalizeContext = Prisma.PollGetPayload<{
+  select: typeof pollFinalizeContextSelect;
 }>;
