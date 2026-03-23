@@ -36,6 +36,7 @@ import { viewerOrganizationsRouter } from "./organizations/_router";
 import { paymentsRouter } from "./payments/_router";
 import { permissionsRouter } from "./pbac/_router";
 import { phoneNumberRouter } from "./phoneNumber/_router";
+import { pollsRouter } from "./polls/_router";
 import { routingFormsRouter } from "./routing-forms/_router";
 import { slotsRouter } from "./slots/_router";
 import { ssoRouter } from "./sso/_router";
@@ -93,4 +94,5 @@ export const viewerRouter = router({
   travelSchedules: travelSchedulesRouter,
   aiVoiceAgent: aiVoiceAgentRouter,
   phoneNumber: phoneNumberRouter,
+  polls: pollsRouter,
 });

@@ -45,6 +45,30 @@ enum SchedulingType {
   MANAGED     @map("managed")
 }
 
+enum PollStatus {
+  OPEN
+  CLOSED
+  FINALIZED
+  CANCELLED
+}
+
+enum PollFinalizationMode {
+  MANUAL
+  MAJORITY
+  UNANIMOUS
+}
+
+enum PollVisibility {
+  PUBLIC
+  INVITE_ONLY
+}
+
+enum PollVoteType {
+  YES
+  NO
+  IF_NEEDED
+}
+
 enum PeriodType {
   UNLIMITED      @map("unlimited")
   ROLLING        @map("rolling")
@@ -180,6 +204,7 @@ model EventType {
   team                               Team?                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   teamId                             Int?
   hashedLink                         HashedLink[]
+  polls                              Poll[]
   bookings                           Booking[]
   availability                       Availability[]
   webhooks                           Webhook[]
@@ -520,6 +545,8 @@ model User {
   agents                         Agent[]
   oAuthClients                   OAuthClient[]
   holidaySettings                UserHolidaySettings?
+  organizedPolls                 Poll[]                        @relation("poll_organizer")
+  finalizedPolls                 Poll[]                        @relation("poll_finalizer")
 
   autoOptInFeatures Boolean @default(false)
 
@@ -937,6 +964,7 @@ model Booking {
   report                       BookingReport?
   wrongAssignmentReports       WrongAssignmentReport[]
   routingTrace                 RoutingTrace?
+  finalizedFromPolls           Poll[]                            @relation("poll_finalized_booking")
 
   // @@partial_index([reassignById])
 
@@ -952,6 +980,87 @@ model Booking {
   @@index([userId, status, startTime])
   @@index([eventTypeId, status])
   @@index([userId, createdAt])
+}
+
+model Poll {
+  id                 Int                  @id @default(autoincrement())
+  uid                String               @unique @default(cuid())
+  eventTypeId        Int
+  eventType          EventType            @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  organizerId        Int
+  organizer          User                 @relation("poll_organizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  title              String
+  description        String?
+  timeZone           String
+  visibility         PollVisibility       @default(PUBLIC)
+  status             PollStatus           @default(OPEN)
+  finalizationMode   PollFinalizationMode @default(MANUAL)
+  expiresAt          DateTime?
+  finalizedAt        DateTime?
+  finalizedById      Int?
+  finalizedBy        User?                @relation("poll_finalizer", fields: [finalizedById], references: [id], onDelete: SetNull)
+  finalizedOptionId  Int?
+  finalizedOption    PollOption?          @relation("poll_finalized_option", fields: [finalizedOptionId], references: [id], onDelete: SetNull)
+  finalizedBookingId Int?
+  finalizedBooking   Booking?             @relation("poll_finalized_booking", fields: [finalizedBookingId], references: [id], onDelete: SetNull)
+  options            PollOption[]
+  participants       PollParticipant[]
+  votes              PollVote[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([eventTypeId])
+  @@index([organizerId])
+  @@index([status])
+  @@index([finalizedOptionId])
+  @@index([finalizedBookingId])
+}
+
+model PollOption {
+  id                Int        @id @default(autoincrement())
+  pollId            Int
+  poll              Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  startTime         DateTime
+  endTime           DateTime
+  position          Int        @default(0)
+  votes             PollVote[]
+  finalizedForPolls Poll[]     @relation("poll_finalized_option")
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([pollId])
+  @@index([pollId, position])
+}
+
+model PollParticipant {
+  id        Int        @id @default(autoincrement())
+  pollId    Int
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  email     String
+  name      String
+  votes     PollVote[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([pollId, email])
+  @@index([pollId])
+}
+
+model PollVote {
+  id            Int             @id @default(autoincrement())
+  pollId        Int
+  poll          Poll            @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  pollOptionId  Int
+  pollOption    PollOption      @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
+  participantId Int
+  participant   PollParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  voteType      PollVoteType
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([pollOptionId, participantId])
+  @@index([pollId])
+  @@index([participantId])
 }
 
 model Tracking {
