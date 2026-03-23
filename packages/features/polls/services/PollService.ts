@@ -3,6 +3,7 @@ import { ErrorWithCode } from "@calcom/lib/errors";
 import { buildPollAutoFinalizeResult } from "../lib/poll-consensus";
 import type { PollAutoFinalizeResult, PollFinalizationMode, PollVoteType } from "../lib/poll-types";
 import { PollRepository } from "../repositories/PollRepository";
+import { PollFinalizeBookingService } from "./PollFinalizeBookingService";
 
 type PollFinalizeCallbackInput = {
   pollId: number;
@@ -15,6 +16,7 @@ type PollFinalizeCallbackOutput = {
 
 type PollServiceDeps = {
   pollRepository?: PollRepository;
+  pollFinalizeBookingService?: PollFinalizeBookingService;
   onFinalize?: (input: PollFinalizeCallbackInput) => Promise<PollFinalizeCallbackOutput>;
 };
 
@@ -45,11 +47,21 @@ type SubmitVoteInput = {
 
 export class PollService {
   private readonly pollRepository: PollRepository;
-  private readonly onFinalize?: (input: PollFinalizeCallbackInput) => Promise<PollFinalizeCallbackOutput>;
+  private readonly onFinalize: (input: PollFinalizeCallbackInput) => Promise<PollFinalizeCallbackOutput>;
 
   constructor(deps?: PollServiceDeps) {
     this.pollRepository = deps?.pollRepository ?? PollRepository.create();
-    this.onFinalize = deps?.onFinalize;
+    const pollFinalizeBookingService =
+      deps?.pollFinalizeBookingService ??
+      new PollFinalizeBookingService({
+        pollRepository: this.pollRepository,
+      });
+
+    this.onFinalize =
+      deps?.onFinalize ??
+      (async (input) => {
+        return await pollFinalizeBookingService.createBookingForFinalizedPoll(input);
+      });
   }
 
   async createPoll(input: CreatePollInput) {
@@ -245,10 +257,31 @@ export class PollService {
     finalizedById: number | null;
     optionId: number;
   }) {
-    let finalizeResponse: PollFinalizeCallbackOutput = { bookingId: null };
-    if (this.onFinalize) {
-      finalizeResponse = await this.onFinalize({ pollId, pollOptionId: optionId });
+    const poll = await this.pollRepository.getPollById(pollId);
+    if (!poll) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found");
     }
+
+    if (poll.status === "FINALIZED") {
+      if (poll.finalizedOptionId && poll.finalizedOptionId !== optionId) {
+        throw new ErrorWithCode(
+          ErrorCode.BadRequest,
+          "Poll has already been finalized for a different option"
+        );
+      }
+
+      return poll;
+    }
+
+    if (poll.status !== "OPEN" && poll.status !== "CLOSED") {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Poll is not in a finalizable state");
+    }
+
+    if (!poll.options.some((option) => option.id === optionId)) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Finalization option does not belong to poll");
+    }
+
+    const finalizeResponse = await this.onFinalize({ pollId, pollOptionId: optionId });
 
     return await this.pollRepository.finalizePoll({
       pollId,

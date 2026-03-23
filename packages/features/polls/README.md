@@ -19,7 +19,7 @@ Implementation roadmap: see `packages/features/polls/IMPLEMENTATION_PLAN.md`.
 - `services/`
   - Poll business logic and orchestration (validation, vote handling, auto-finalization decisions).
   - Owns when to call the finalize-booking hook.
-  - Current file: `PollService.ts`.
+  - Current files: `PollService.ts`, `PollFinalizeBookingService.ts`.
 
 ## Out-of-module integration points
 
@@ -46,9 +46,11 @@ type PollFinalizeCallbackOutput = {
 ### Behavior
 
 - The hook is called by `finalizePollInternal(...)` when a poll is finalized (manual or auto mode).
-- If no hook is provided, finalization still completes and stores `finalizedBookingId = null`.
+- By default, `PollService` wires this hook to `PollFinalizeBookingService`, which creates a booking via `RegularBookingService`.
+- If a custom hook is provided to `PollService`, it overrides the default booking integration.
 - If the hook returns `{ bookingId }`, that value is persisted to `Poll.finalizedBookingId`.
 - If the hook throws, poll finalization fails and the error bubbles up.
+- Current default integration expects an event type location that does not require attendee-provided input.
 
 ### Integration intent
 
