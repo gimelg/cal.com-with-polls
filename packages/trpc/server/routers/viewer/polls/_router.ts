@@ -36,6 +36,14 @@ const getPollSchema = z.object({
   uid: z.string().min(1),
 });
 
+const listPollsSchema = z.object({
+  eventTypeId: z.number().int().positive(),
+});
+
+const closePollSchema = z.object({
+  pollId: z.number().int().positive(),
+});
+
 export const pollsRouter = router({
   create: authedProcedure.input(createPollSchema).mutation(async ({ ctx, input }) => {
     const pollService = new PollService();
@@ -46,9 +54,16 @@ export const pollsRouter = router({
       expiresAt: input.expiresAt ?? null,
     });
   }),
-  getByUid: authedProcedure.input(getPollSchema).query(async ({ ctx, input }) => {
+  getByUidForOrganizer: authedProcedure.input(getPollSchema).query(async ({ ctx, input }) => {
     const pollService = new PollService();
     return await pollService.getPollByUidForOrganizer({ uid: input.uid, organizerId: ctx.user.id });
+  }),
+  listByEventType: authedProcedure.input(listPollsSchema).query(async ({ ctx, input }) => {
+    const pollService = new PollService();
+    return await pollService.getPollsByEventTypeForOrganizer({
+      eventTypeId: input.eventTypeId,
+      organizerId: ctx.user.id,
+    });
   }),
   finalizeManually: authedProcedure.input(manualFinalizeSchema).mutation(async ({ ctx, input }) => {
     const pollService = new PollService();
@@ -56,6 +71,13 @@ export const pollsRouter = router({
       pollId: input.pollId,
       organizerId: ctx.user.id,
       optionId: input.optionId,
+    });
+  }),
+  close: authedProcedure.input(closePollSchema).mutation(async ({ ctx, input }) => {
+    const pollService = new PollService();
+    return await pollService.closePollManually({
+      pollId: input.pollId,
+      organizerId: ctx.user.id,
     });
   }),
 });

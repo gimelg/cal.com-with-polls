@@ -32,6 +32,7 @@ export const ENDPOINTS = [
   "webhook",
   "googleWorkspace",
   "oAuth",
+  "polls",
   "delegationCredential",
   "credits",
   "filterSegments",
