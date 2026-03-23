@@ -106,6 +106,25 @@ export class PollService {
     return poll;
   }
 
+  async getPollsByEventTypeForOrganizer({
+    eventTypeId,
+    organizerId,
+  }: {
+    eventTypeId: number;
+    organizerId: number;
+  }) {
+    const canManageEventType = await this.pollRepository.canUserCreatePollForEventType({
+      eventTypeId,
+      userId: organizerId,
+    });
+
+    if (!canManageEventType) {
+      throw new ErrorWithCode(ErrorCode.Forbidden, "You do not have access to this event type's polls");
+    }
+
+    return await this.pollRepository.getPollsByEventTypeAndOrganizerId({ eventTypeId, organizerId });
+  }
+
   async getPublicPollByUid(uid: string) {
     const poll = await this.getPollByUid(uid);
     return {
@@ -246,6 +265,23 @@ export class PollService {
       finalizedById: organizerId,
       optionId,
     });
+  }
+
+  async closePollManually({ pollId, organizerId }: { pollId: number; organizerId: number }) {
+    const poll = await this.pollRepository.getPollByIdAndOrganizerId(pollId, organizerId);
+    if (!poll) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found");
+    }
+
+    if (poll.status === "OPEN") {
+      return await this.pollRepository.closePoll(pollId);
+    }
+
+    if (poll.status === "CLOSED") {
+      return poll;
+    }
+
+    throw new ErrorWithCode(ErrorCode.BadRequest, "Only open polls can be closed");
   }
 
   private async finalizePollInternal({

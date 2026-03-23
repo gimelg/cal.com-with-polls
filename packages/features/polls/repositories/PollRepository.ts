@@ -182,6 +182,25 @@ export class PollRepository {
     });
   }
 
+  async getPollsByEventTypeAndOrganizerId({
+    eventTypeId,
+    organizerId,
+  }: {
+    eventTypeId: number;
+    organizerId: number;
+  }) {
+    return await this.prismaClient.poll.findMany({
+      where: {
+        eventTypeId,
+        organizerId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: pollDetailsSelect,
+    });
+  }
+
   async getPollByIdAndOrganizerId(id: number, organizerId: number) {
     return await this.prismaClient.poll.findFirst({
       where: {
