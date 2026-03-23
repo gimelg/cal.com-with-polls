@@ -3,6 +3,7 @@
 import { useEventTypeForm } from "@calcom/atoms/event-types/hooks/useEventTypeForm";
 import { useHandleRouteChange } from "@calcom/atoms/event-types/hooks/useHandleRouteChange";
 import { useTabsNavigations } from "@calcom/atoms/event-types/hooks/useTabsNavigations";
+import { useOrgBranding } from "@calcom/features/ee/organizations/context/provider";
 import type { ChildrenEventType } from "@calcom/features/eventtypes/components/ChildrenEventTypeSelect";
 import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
 import { WEBSITE_URL } from "@calcom/lib/constants";
@@ -14,6 +15,7 @@ import type { RouterOutputs } from "@calcom/trpc/react";
 import { trpc } from "@calcom/trpc/react";
 import useMeQuery from "@calcom/trpc/react/hooks/useMeQuery";
 import { showToast } from "@calcom/ui/components/toast";
+import { revalidateTeamEventTypeCache } from "@calcom/web/app/(booking-page-wrapper)/team/[slug]/[type]/actions";
 import { revalidateEventTypeEditPage } from "@calcom/web/app/(use-page-wrapper)/event-types/[type]/actions";
 import { TRPCClientError } from "@trpc/react-query";
 import dynamic from "next/dynamic";
@@ -61,6 +63,8 @@ const EventWebhooksTab = dynamic(() =>
   import("./tabs/webhooks/EventWebhooksTab").then((mod) => mod.EventWebhooksTab)
 );
 
+
+const EventPollsTab = dynamic(() => import("./tabs/polls/EventPollsTab").then((mod) => mod.EventPollsTab));
 
 export type EventTypeWebWrapperProps = {
   id: number;
@@ -218,6 +222,7 @@ const EventTypeWeb = ({
       />
     ),
     recurring: <EventRecurringTab eventType={eventType} />,
+    polls: <EventPollsTab eventType={eventType} />,
     apps: (
       <EventAppsTab
         eventType={{ ...eventType, URL: permalink }}
@@ -256,6 +261,7 @@ const EventTypeWeb = ({
         EventLimitsTab,
         EventAdvancedTab,
         EventRecurringTab,
+        EventPollsTab,
         EventAppsTab,
         EventWebhooksTab,
       ];
@@ -285,6 +291,7 @@ const EventTypeWeb = ({
         "limits",
         "advanced",
         "recurring",
+        "polls",
         "apps",
         "webhooks",
       ])

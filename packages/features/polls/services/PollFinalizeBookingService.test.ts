@@ -45,6 +45,7 @@ function buildPollContext(overrides?: Partial<PollFinalizeContext>): PollFinaliz
       },
     ],
     eventType: {
+      length: 30,
       locations: [
         {
           type: "integrations:daily_video",
@@ -81,6 +82,7 @@ describe("PollFinalizeBookingService", () => {
         bookingMeta: {
           userId: 200,
           impersonatedByUserUuid: null,
+          skipAvailabilityCheck: true,
         },
         bookingData: expect.objectContaining({
           eventTypeId: 100,
@@ -149,5 +151,41 @@ describe("PollFinalizeBookingService", () => {
         pollOptionId: 11,
       })
     ).rejects.toThrow("At least one participant must vote yes or if-needed for the finalized option");
+  });
+
+  it("normalizes booking end time to event type length", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(
+        buildPollContext({
+          eventType: {
+            length: 15,
+            locations: [{ type: "integrations:daily_video" }],
+          },
+        })
+      ),
+    };
+    const createRegularBooking = vi.fn().mockResolvedValue({ id: 45 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey: vi.fn(),
+      findBookingByUid: vi.fn(),
+    });
+
+    await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    const expectedEnd = new Date(optionStart.getTime() + 15 * 60 * 1000).toISOString();
+
+    expect(createRegularBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingData: expect.objectContaining({
+          end: expectedEnd,
+        }),
+      })
+    );
   });
 });

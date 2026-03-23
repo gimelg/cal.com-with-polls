@@ -197,6 +197,20 @@ function getNavigation({
       "data-testid": "event_advanced_tab_title",
     },
     {
+      name: t("polls"),
+      href: `/event-types/${id}?tabName=polls`,
+      icon: "users",
+      info: t("polls_tab_description"),
+      "data-testid": "polls",
+    },
+    {
+      name: t("polls"),
+      href: `/event-types/${id}?tabName=polls`,
+      icon: "users",
+      info: t("polls_tab_description"),
+      "data-testid": "polls",
+    },
+    {
       name: t("apps"),
       href: `/event-types/${id}?tabName=apps`,
       icon: "grid-3x3",

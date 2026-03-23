@@ -79,6 +79,23 @@ export class PollService {
       );
     }
 
+    const eventTypeLength = await this.pollRepository.getEventTypeLength(input.eventTypeId);
+    if (!eventTypeLength) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Event type not found");
+    }
+
+    const optionWithInvalidLength = input.options.find((option) => {
+      const optionDurationInMinutes = Math.round(
+        (option.endTime.getTime() - option.startTime.getTime()) / (1000 * 60)
+      );
+
+      return optionDurationInMinutes !== eventTypeLength;
+    });
+
+    if (optionWithInvalidLength) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Poll option duration must match the event type length");
+    }
+
     return await this.pollRepository.createPoll({
       ...input,
       options: input.options.map((option, index) => ({

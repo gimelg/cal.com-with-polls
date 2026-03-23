@@ -36,6 +36,7 @@ const tabs = [
   "advanced",
   "instant",
   "recurring",
+  "polls",
   "apps",
   "webhooks",
   "ai",

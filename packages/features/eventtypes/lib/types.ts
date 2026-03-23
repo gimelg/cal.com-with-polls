@@ -427,6 +427,7 @@ export type TabMap = {
   availability: React.ReactNode;
   instant?: React.ReactNode;
   limits: React.ReactNode;
+  polls?: React.ReactNode;
   recurring: React.ReactNode;
   setup: React.ReactNode;
   team?: React.ReactNode;

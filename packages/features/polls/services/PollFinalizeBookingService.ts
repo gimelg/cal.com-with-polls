@@ -35,6 +35,7 @@ type PollFinalizeBookingServiceDeps = {
     bookingMeta: {
       userId: number;
       impersonatedByUserUuid: null;
+      skipAvailabilityCheck?: boolean;
     };
   }) => Promise<PollBookingCreateResult>;
   findBookingByIdempotencyKey?: (idempotencyKey: string) => Promise<{ id: number } | null>;
@@ -138,6 +139,7 @@ export class PollFinalizeBookingService {
     const [primaryParticipant, ...guestParticipants] = participants;
     const locationValue = this.resolveLocationValue(poll.eventType.locations);
     const idempotencyKey = `poll-finalize:${poll.id}:${pollOption.id}`;
+    const normalizedEnd = new Date(pollOption.startTime.getTime() + poll.eventType.length * 60 * 1000);
 
     const responses: Record<string, unknown> = {
       email: primaryParticipant.email,
@@ -158,7 +160,7 @@ export class PollFinalizeBookingService {
     } = {
       eventTypeId: poll.eventTypeId,
       start: pollOption.startTime.toISOString(),
-      end: pollOption.endTime.toISOString(),
+      end: normalizedEnd.toISOString(),
       timeZone: poll.timeZone,
       language: "en",
       metadata: {
@@ -176,6 +178,7 @@ export class PollFinalizeBookingService {
         bookingMeta: {
           userId: poll.organizerId,
           impersonatedByUserUuid: null,
+          skipAvailabilityCheck: true,
         },
       });
 

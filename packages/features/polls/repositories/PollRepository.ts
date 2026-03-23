@@ -83,6 +83,7 @@ const pollFinalizeContextSelect = {
   },
   eventType: {
     select: {
+      length: true,
       locations: true,
     },
   },
@@ -156,6 +157,19 @@ export class PollRepository {
     });
 
     return Boolean(eventType);
+  }
+
+  async getEventTypeLength(eventTypeId: number) {
+    const eventType = await this.prismaClient.eventType.findUnique({
+      where: {
+        id: eventTypeId,
+      },
+      select: {
+        length: true,
+      },
+    });
+
+    return eventType?.length ?? null;
   }
 
   async getPollByUid(uid: string) {
