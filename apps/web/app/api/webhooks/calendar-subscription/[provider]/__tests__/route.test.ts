@@ -34,8 +34,6 @@ vi.mock("next/server", () => ({
 }));
 
 vi.mock("@calcom/features/calendar-subscription/lib/CalendarSubscriptionService");
-vi.mock("@calcom/features/calendar-subscription/lib/cache/CalendarCacheEventService");
-vi.mock("@calcom/features/calendar-subscription/lib/sync/CalendarSyncService");
 vi.mock("@calcom/prisma", () => ({
   prisma: {},
 }));

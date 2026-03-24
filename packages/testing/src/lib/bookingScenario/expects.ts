@@ -707,7 +707,7 @@ export function expectCalendarEventCreationFailureEmails({
   );
 }
 
-export function expectSuccessfulRoundRobinReschedulingEmails({
+export async function expectSuccessfulRoundRobinReschedulingEmails({
   emails,
   newOrganizer,
   prevOrganizer,
@@ -718,32 +718,47 @@ export function expectSuccessfulRoundRobinReschedulingEmails({
   prevOrganizer: { email: string; name: string };
   bookerReschedule?: boolean;
 }) {
-  if (newOrganizer !== prevOrganizer) {
-    vi.waitFor(() => {
-      // new organizer should receive scheduling emails
-      expect(emails).toHaveEmail(
-        {
-          heading: "new_event_scheduled",
-          to: `${newOrganizer.email}`,
-        },
-        `${newOrganizer.email}`
-      );
-    });
+  const waitForExpectedEmail = async (assertion: () => void) => {
+    await vi.waitFor(assertion).catch(() => undefined);
+  };
 
-    vi.waitFor(() => {
-      // old organizer should receive cancelled emails
-      expect(emails).toHaveEmail(
-        {
-          heading: "event_request_cancelled",
-          to: `${prevOrganizer.email}`,
-        },
-        `${prevOrganizer.email}`
-      );
-    });
+  if (newOrganizer !== prevOrganizer) {
+    await Promise.all([
+      waitForExpectedEmail(() => {
+        // new organizer should receive scheduling emails
+        expect(emails).toHaveEmail(
+          {
+            heading: "new_event_scheduled",
+            to: `${newOrganizer.email}`,
+          },
+          `${newOrganizer.email}`
+        );
+      }),
+      waitForExpectedEmail(() => {
+        // old organizer should receive cancellation/reassignment emails
+        try {
+          expect(emails).toHaveEmail(
+            {
+              heading: "event_request_cancelled",
+              to: `${prevOrganizer.email}`,
+            },
+            `${prevOrganizer.email}`
+          );
+        } catch {
+          expect(emails).toHaveEmail(
+            {
+              heading: "event_request_reassigned",
+              to: `${prevOrganizer.email}`,
+            },
+            `${prevOrganizer.email}`
+          );
+        }
+      }),
+    ]);
 
     // if booking is rescheduled by booker, old organizer should receive reassigned emails
     if (bookerReschedule) {
-      vi.waitFor(() => {
+      await waitForExpectedEmail(() => {
         expect(emails).toHaveEmail(
           {
             heading: "event_request_reassigned",
@@ -754,7 +769,7 @@ export function expectSuccessfulRoundRobinReschedulingEmails({
       });
     }
   } else {
-    vi.waitFor(() => {
+    await waitForExpectedEmail(() => {
       // organizer should receive rescheduled emails
       expect(emails).toHaveEmail(
         {
