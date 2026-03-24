@@ -89,6 +89,7 @@ describe("PollFinalizeBookingService", () => {
           start: optionStart.toISOString(),
           end: optionEnd.toISOString(),
           idempotencyKey: "poll-finalize:1:11",
+          noEmail: false,
           responses: expect.objectContaining({
             email: "alice@example.com",
             name: "Alice",
@@ -184,6 +185,48 @@ describe("PollFinalizeBookingService", () => {
       expect.objectContaining({
         bookingData: expect.objectContaining({
           end: expectedEnd,
+        }),
+      })
+    );
+  });
+
+  it("suppresses booking emails for name-only polls", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(
+        buildPollContext({
+          participants: [
+            {
+              id: 21,
+              name: "Participant One",
+              email: "participant-100-21@poll.local",
+            },
+            {
+              id: 22,
+              name: "Participant Two",
+              email: "participant-100-22@poll.local",
+            },
+          ],
+        })
+      ),
+    };
+    const createRegularBooking = vi.fn().mockResolvedValue({ id: 46 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey: vi.fn(),
+      findBookingByUid: vi.fn(),
+    });
+
+    await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    expect(createRegularBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingData: expect.objectContaining({
+          noEmail: true,
         }),
       })
     );

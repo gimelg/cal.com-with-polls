@@ -11,6 +11,7 @@ import { ErrorWithCode } from "@calcom/lib/errors";
 import { prisma } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
+import { isPollAliasEmail } from "../lib/poll-types";
 import type { PollVoteType } from "../lib/poll-types";
 import { PollRepository } from "../repositories/PollRepository";
 
@@ -44,7 +45,6 @@ type PollFinalizeBookingServiceDeps = {
 };
 
 const YES_OR_IF_NEEDED: PollVoteType[] = ["YES", "IF_NEEDED"];
-
 function defaultIsIdempotencyConflictError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -140,6 +140,9 @@ export class PollFinalizeBookingService {
     const locationValue = this.resolveLocationValue(poll.eventType.locations);
     const idempotencyKey = `poll-finalize:${poll.id}:${pollOption.id}`;
     const normalizedEnd = new Date(pollOption.startTime.getTime() + poll.eventType.length * 60 * 1000);
+    const shouldSuppressBookingEmails = participants.every((participant) =>
+      isPollAliasEmail(participant.email)
+    );
 
     const responses: Record<string, unknown> = {
       email: primaryParticipant.email,
@@ -170,6 +173,7 @@ export class PollFinalizeBookingService {
       },
       responses,
       idempotencyKey,
+      noEmail: shouldSuppressBookingEmails,
     };
 
     try {
