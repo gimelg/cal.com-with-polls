@@ -1,7 +1,9 @@
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
+import type { Prisma } from "@calcom/prisma/client";
 import { buildPollAutoFinalizeResult } from "../lib/poll-consensus";
 import type { PollAutoFinalizeResult, PollFinalizationMode, PollVoteType } from "../lib/poll-types";
+import { isPollAliasEmail } from "../lib/poll-types";
 import { PollRepository } from "../repositories/PollRepository";
 import { PollFinalizeBookingService } from "./PollFinalizeBookingService";
 
@@ -27,6 +29,7 @@ type CreatePollInput = {
   description?: string | null;
   timeZone: string;
   visibility: "PUBLIC" | "INVITE_ONLY";
+  isAnonymous: boolean;
   finalizationMode: PollFinalizationMode;
   expiresAt?: Date | null;
   options: { startTime: Date; endTime: Date }[];
@@ -144,11 +147,33 @@ export class PollService {
 
   async getPublicPollByUid(uid: string) {
     const poll = await this.getPollByUid(uid);
+
+    let participantIdentityMode: "NAME_AND_EMAIL" | "NAME_ONLY" = "NAME_ONLY";
+
+    if (poll.visibility === "INVITE_ONLY") {
+      participantIdentityMode = "NAME_AND_EMAIL";
+    }
+
+    const hasParticipantWithRealEmail = poll.participants.some(
+      (participant) => !isPollAliasEmail(participant.email)
+    );
+
+    if (hasParticipantWithRealEmail) {
+      participantIdentityMode = "NAME_AND_EMAIL";
+    }
+
+    const respondedParticipantIds = new Set(poll.votes.map((vote) => vote.participantId));
+    const respondedParticipants = poll.participants.filter((participant) =>
+      respondedParticipantIds.has(participant.id)
+    );
+
     return {
       ...poll,
-      participants: poll.participants.map((participant) => ({
+      participantIdentityMode,
+      participantCount: respondedParticipants.length,
+      participants: respondedParticipants.map((participant) => ({
         id: participant.id,
-        name: participant.name,
+        name: poll.isAnonymous ? "" : participant.name,
       })),
     };
   }
@@ -301,6 +326,73 @@ export class PollService {
     throw new ErrorWithCode(ErrorCode.BadRequest, "Only open polls can be closed");
   }
 
+  async updatePollParticipantForOrganizer({
+    pollId,
+    organizerId,
+    participantId,
+    name,
+    email,
+  }: {
+    pollId: number;
+    organizerId: number;
+    participantId: number;
+    name: string;
+    email: string;
+  }) {
+    const poll = await this.pollRepository.getPollByIdAndOrganizerId(pollId, organizerId);
+    if (!poll) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found");
+    }
+
+    if (poll.visibility !== "INVITE_ONLY") {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Only invite-only polls support participant updates");
+    }
+
+    if (poll.status !== "OPEN") {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Only open polls support participant updates");
+    }
+
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Participant name is required");
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Participant email is required");
+    }
+
+    const participant = poll.participants.find((candidate) => candidate.id === participantId);
+    if (!participant) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Participant not found in this poll");
+    }
+
+    try {
+      const updatedPoll = await this.pollRepository.updateParticipant({
+        pollId,
+        participantId,
+        name: normalizedName,
+        email: normalizedEmail,
+      });
+
+      if (!updatedPoll) {
+        throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found after participant update");
+      }
+
+      return updatedPoll;
+    } catch (error) {
+      const prismaError = error as Prisma.PrismaClientKnownRequestError;
+      if (prismaError.code === "P2002") {
+        throw new ErrorWithCode(
+          ErrorCode.BadRequest,
+          "A participant with this email already exists in this poll"
+        );
+      }
+
+      throw error;
+    }
+  }
+
   private async finalizePollInternal({
     pollId,
     finalizedById,
@@ -355,6 +447,13 @@ export class PollService {
 
     if (input.visibility === "INVITE_ONLY" && input.participants.length === 0) {
       throw new ErrorWithCode(ErrorCode.BadRequest, "Invite-only polls require at least one participant");
+    }
+
+    if (input.visibility === "INVITE_ONLY" && input.isAnonymous) {
+      throw new ErrorWithCode(
+        ErrorCode.BadRequest,
+        "Invite-only polls cannot be anonymous because participant emails are required"
+      );
     }
   }
 }

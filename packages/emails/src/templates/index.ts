@@ -38,6 +38,9 @@ export { OrganizerRequestedToRescheduleEmail } from "./OrganizerRequestedToResch
 export { OrganizerRequestReminderEmail } from "./OrganizerRequestReminderEmail";
 export { OrganizerRescheduledEmail } from "./OrganizerRescheduledEmail";
 export { OrganizerScheduledEmail } from "./OrganizerScheduledEmail";
+export { PollInviteEmail } from "./PollInviteEmail";
+export { ProrationInvoiceEmail } from "./ProrationInvoiceEmail";
+export { ProrationReminderEmail } from "./ProrationReminderEmail";
 export { SlugReplacementEmail } from "./SlugReplacementEmail";
 export { TeamInviteEmail } from "./TeamInviteEmail";
 export { VerifyAccountEmail } from "./VerifyAccountEmail";
