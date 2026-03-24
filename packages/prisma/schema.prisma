@@ -993,6 +993,7 @@ model Poll {
   description        String?
   timeZone           String
   visibility         PollVisibility       @default(PUBLIC)
+  isAnonymous        Boolean              @default(false)
   status             PollStatus           @default(OPEN)
   finalizationMode   PollFinalizationMode @default(MANUAL)
   expiresAt          DateTime?

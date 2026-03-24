@@ -1,5 +1,4 @@
-import { useCallback, useState } from "react";
-
+import { Dialog } from "@calcom/features/components/controlled-dialog";
 import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
 import { createPollAliasEmail, isPollAliasEmail } from "@calcom/features/polls/lib/poll-types";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
@@ -7,9 +6,11 @@ import type { RouterOutputs } from "@calcom/trpc/react";
 import { trpc } from "@calcom/trpc/react";
 import { Badge } from "@calcom/ui/components/badge";
 import { Button } from "@calcom/ui/components/button";
+import { ConfirmationDialogContent } from "@calcom/ui/components/dialog";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
-import { TextAreaField, TextField } from "@calcom/ui/components/form";
+import { CheckboxField, TextAreaField, TextField } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
+import { useCallback, useState } from "react";
 
 type EventPollsTabProps = {
   eventType: EventTypeSetupProps["eventType"];
@@ -27,6 +28,18 @@ type DraftParticipant = {
   id: number;
   name: string;
   email: string;
+};
+
+type ParticipantEditDraft = {
+  name: string;
+  email: string;
+};
+
+type ResendInviteTarget = {
+  pollUid: string;
+  participantId: number;
+  participantName: string;
+  participantEmail: string;
 };
 
 type ParticipantIdentityMode = "NAME_AND_EMAIL" | "NAME_ONLY";
@@ -56,6 +69,9 @@ const createParticipantDraft = (id: number): DraftParticipant => ({
   name: "",
   email: "",
 });
+
+const getParticipantEditKey = (pollId: number, participantId: number) => `${pollId}:${participantId}`;
+const getOptionResponseToggleKey = (pollId: number, optionId: number) => `${pollId}:${optionId}`;
 
 const getPollOptionVoteCounts = (poll: PollItem, optionId: number) => {
   let yes = 0;
@@ -94,19 +110,41 @@ const getPollParticipantIdentityMode = (poll: PollItem): ParticipantIdentityMode
   return "NAME_AND_EMAIL";
 };
 
+const getPollVoteVariant = (voteType: PollItem["votes"][number]["voteType"]) => {
+  if (voteType === "YES") return "green" as const;
+  if (voteType === "IF_NEEDED") return "orange" as const;
+  return "red" as const;
+};
+
+const getPollVoteSortWeight = (voteType: PollItem["votes"][number]["voteType"]) => {
+  if (voteType === "YES") return 0;
+  if (voteType === "IF_NEEDED") return 1;
+  return 2;
+};
+
 export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
   const { t } = useLocale();
   const utils = trpc.useUtils();
   const eventLengthMinutes = eventType.length || 30;
+
+  const getPollVoteLabel = (voteType: PollItem["votes"][number]["voteType"]) => {
+    if (voteType === "YES") return t("yes");
+    if (voteType === "IF_NEEDED") return t("poll_vote_if_needed");
+    return t("no");
+  };
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [finalizationMode, setFinalizationMode] = useState<"MANUAL" | "MAJORITY" | "UNANIMOUS">("MANUAL");
   const [visibility, setVisibility] = useState<"PUBLIC" | "INVITE_ONLY">("PUBLIC");
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [participantIdentityMode, setParticipantIdentityMode] =
     useState<ParticipantIdentityMode>("NAME_AND_EMAIL");
   const [expiresAt, setExpiresAt] = useState("");
+  const [participantEdits, setParticipantEdits] = useState<Record<string, ParticipantEditDraft>>({});
+  const [expandedOptionResponses, setExpandedOptionResponses] = useState<Record<string, boolean>>({});
+  const [resendInviteTarget, setResendInviteTarget] = useState<ResendInviteTarget | null>(null);
   const [optionDrafts, setOptionDrafts] = useState<DraftOption[]>([
     createOptionDraft(1, eventLengthMinutes, 1),
     createOptionDraft(2, eventLengthMinutes, 2),
@@ -122,6 +160,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     setDescription("");
     setFinalizationMode("MANUAL");
     setVisibility("PUBLIC");
+    setIsAnonymous(false);
     setParticipantIdentityMode("NAME_AND_EMAIL");
     setExpiresAt("");
     setOptionDrafts([
@@ -157,6 +196,37 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     onSuccess: async () => {
       showToast(t("poll_closed_successfully"), "success");
       await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
+    },
+    onError: (error) => {
+      showToast(error.message, "error");
+    },
+  });
+
+  const updateParticipantMutation = trpc.viewer.polls.updateParticipant.useMutation({
+    onSuccess: async (_, variables) => {
+      setParticipantEdits((previous) => {
+        const key = getParticipantEditKey(variables.pollId, variables.participantId);
+        if (!previous[key]) {
+          return previous;
+        }
+
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+
+      showToast(t("poll_participant_updated_successfully"), "success");
+      await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
+    },
+    onError: (error) => {
+      showToast(error.message, "error");
+    },
+  });
+
+  const resendParticipantInviteMutation = trpc.viewer.polls.resendParticipantInvite.useMutation({
+    onSuccess: () => {
+      setResendInviteTarget(null);
+      showToast(t("poll_participant_invite_resent_successfully"), "success");
     },
     onError: (error) => {
       showToast(error.message, "error");
@@ -303,6 +373,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
       description: description.trim() || null,
       finalizationMode,
       visibility,
+      isAnonymous,
       timeZone,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       options,
@@ -310,8 +381,139 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     });
   };
 
+  const getParticipantEditDraft = (pollId: number, participant: PollItem["participants"][number]) => {
+    const key = getParticipantEditKey(pollId, participant.id);
+    return participantEdits[key] || { name: participant.name, email: participant.email };
+  };
+
+  const setParticipantEditField = ({
+    pollId,
+    participantId,
+    baseName,
+    baseEmail,
+    field,
+    value,
+  }: {
+    pollId: number;
+    participantId: number;
+    baseName: string;
+    baseEmail: string;
+    field: keyof ParticipantEditDraft;
+    value: string;
+  }) => {
+    const key = getParticipantEditKey(pollId, participantId);
+    setParticipantEdits((previous) => {
+      const current = previous[key] || {
+        name: baseName,
+        email: baseEmail,
+      };
+
+      return {
+        ...previous,
+        [key]: {
+          ...current,
+          [field]: value,
+        },
+      };
+    });
+  };
+
+  const saveParticipantUpdate = ({
+    pollId,
+    participantId,
+    baseName,
+    baseEmail,
+  }: {
+    pollId: number;
+    participantId: number;
+    baseName: string;
+    baseEmail: string;
+  }) => {
+    const key = getParticipantEditKey(pollId, participantId);
+    const draft = participantEdits[key] || {
+      name: baseName,
+      email: baseEmail,
+    };
+
+    const trimmedName = draft.name.trim();
+    const trimmedEmail = draft.email.trim().toLowerCase();
+
+    if (!trimmedName || !trimmedEmail) {
+      showToast(t("poll_participant_name_and_email_required"), "error");
+      return;
+    }
+
+    if (!EMAIL_PATTERN.test(trimmedEmail)) {
+      showToast(t("poll_invalid_participant_email"), "error");
+      return;
+    }
+
+    updateParticipantMutation.mutate({
+      pollId,
+      participantId,
+      name: trimmedName,
+      email: trimmedEmail,
+    });
+  };
+
+  const requestResendParticipantInvite = ({
+    pollId,
+    pollUid,
+    participantId,
+    baseName,
+    baseEmail,
+  }: {
+    pollId: number;
+    pollUid: string;
+    participantId: number;
+    baseName: string;
+    baseEmail: string;
+  }) => {
+    const key = getParticipantEditKey(pollId, participantId);
+    const draft = participantEdits[key] || {
+      name: baseName,
+      email: baseEmail,
+    };
+
+    const normalizedDraftName = draft.name.trim();
+    const normalizedDraftEmail = draft.email.trim().toLowerCase();
+    const isDirty =
+      normalizedDraftName !== baseName || normalizedDraftEmail !== baseEmail.trim().toLowerCase();
+
+    if (isDirty) {
+      showToast(t("poll_save_changes_before_resend"), "warning");
+      return;
+    }
+
+    setResendInviteTarget({
+      pollUid,
+      participantId,
+      participantName: baseName,
+      participantEmail: baseEmail,
+    });
+  };
+
+  const confirmResendParticipantInvite = () => {
+    if (!resendInviteTarget) {
+      return;
+    }
+
+    resendParticipantInviteMutation.mutate({
+      pollUid: resendInviteTarget.pollUid,
+      participantId: resendInviteTarget.participantId,
+    });
+  };
+
+  const toggleOptionResponses = (pollId: number, optionId: number) => {
+    const key = getOptionResponseToggleKey(pollId, optionId);
+    setExpandedOptionResponses((previous) => ({
+      ...previous,
+      [key]: !previous[key],
+    }));
+  };
+
   return (
-    <div className="stack-y-6">
+    <div className="stack-y-6 min-w-0">
       <div className="rounded-lg border border-subtle p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -363,12 +565,29 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                 <select
                   className="border-default bg-default text-default h-9 w-full rounded-[10px] border px-3 text-sm"
                   value={visibility}
-                  onChange={(event) => setVisibility(event.target.value as "PUBLIC" | "INVITE_ONLY")}>
+                  onChange={(event) => {
+                    const nextVisibility = event.target.value as "PUBLIC" | "INVITE_ONLY";
+                    setVisibility(nextVisibility);
+                    if (nextVisibility === "INVITE_ONLY") {
+                      setIsAnonymous(false);
+                    }
+                  }}>
                   <option value="PUBLIC">{t("poll_visibility_public")}</option>
                   <option value="INVITE_ONLY">{t("poll_visibility_invite_only")}</option>
                 </select>
               </div>
             </div>
+
+            {visibility !== "INVITE_ONLY" ? (
+              <div>
+                <CheckboxField
+                  checked={isAnonymous}
+                  onChange={(event) => setIsAnonymous(event.target.checked)}
+                  description={t("poll_anonymous_responses")}
+                />
+                <p className="text-muted ml-7 mt-1 text-xs">{t("poll_anonymous_responses_hint")}</p>
+              </div>
+            ) : null}
 
             <TextField
               type="datetime-local"
@@ -431,14 +650,11 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2">
                 <h4 className="text-default text-sm font-semibold">{t("poll_participants")}</h4>
-                <Button type="button" color="minimal" StartIcon="plus" onClick={addParticipantDraft}>
-                  {t("add_participant")}
-                </Button>
               </div>
-              <div className="mb-3 grid gap-4 md:grid-cols-2">
-                <div>
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="w-full md:max-w-sm">
                   <label className="text-default mb-1 block text-sm font-medium">
                     {t("poll_participant_identity_mode")}
                   </label>
@@ -456,6 +672,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                     <option value="NAME_ONLY">{t("poll_participant_identity_name_only")}</option>
                   </select>
                 </div>
+                <Button type="button" color="minimal" StartIcon="plus" onClick={addParticipantDraft}>
+                  {t("add_participant")}
+                </Button>
               </div>
               <p className="text-muted mb-3 text-xs">{t("poll_participants_hint")}</p>
               {participantIdentityMode === "NAME_ONLY" ? (
@@ -472,6 +691,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                     }>
                     <TextField
                       label={t("name")}
+                      placeholder={t("poll_participant_name_placeholder")}
                       value={participant.name}
                       onChange={(event) =>
                         setParticipantDrafts((previous) =>
@@ -485,6 +705,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                       <TextField
                         type="email"
                         label={t("email")}
+                        placeholder={t("poll_participant_email_placeholder")}
                         value={participant.email}
                         onChange={(event) =>
                           setParticipantDrafts((previous) =>
@@ -540,9 +761,12 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
             const finalizedOption = poll.finalizedOptionId
               ? (poll.options.find((option) => option.id === poll.finalizedOptionId) ?? null)
               : null;
+            const participantsById = new Map(
+              poll.participants.map((participant) => [participant.id, participant])
+            );
 
             return (
-              <div key={poll.id} className="rounded-lg border border-subtle p-6">
+              <div key={poll.id} className="min-w-0 overflow-hidden rounded-lg border border-subtle p-6">
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <h4 className="text-emphasis text-base font-semibold">{poll.title}</h4>
@@ -554,6 +778,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                         {t(`poll_finalization_${poll.finalizationMode.toLowerCase()}`)}
                       </Badge>
                       <Badge variant="gray">{t(`poll_visibility_${poll.visibility.toLowerCase()}`)}</Badge>
+                      {poll.isAnonymous ? <Badge variant="gray">{t("poll_anonymous_badge")}</Badge> : null}
                       <Badge variant="gray">
                         {t(
                           getPollParticipantIdentityMode(poll) === "NAME_ONLY"
@@ -586,49 +811,211 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   {poll.options.map((option, index) => {
                     const voteCounts = getPollOptionVoteCounts(poll, option.id);
                     const isFinalizedOption = poll.finalizedOptionId === option.id;
+                    const responseToggleKey = getOptionResponseToggleKey(poll.id, option.id);
+                    const isResponsesExpanded = expandedOptionResponses[responseToggleKey] ?? false;
+                    const optionResponses = poll.votes
+                      .filter((vote) => vote.pollOptionId === option.id)
+                      .map((vote) => {
+                        const participant = participantsById.get(vote.participantId);
+                        if (!participant) {
+                          return null;
+                        }
+
+                        return {
+                          participantId: participant.id,
+                          participantName: participant.name,
+                          voteType: vote.voteType,
+                        };
+                      })
+                      .filter(
+                        (
+                          response
+                        ): response is {
+                          participantId: number;
+                          participantName: string;
+                          voteType: PollItem["votes"][number]["voteType"];
+                        } => Boolean(response)
+                      )
+                      .sort((left, right) => {
+                        const voteWeightDifference =
+                          getPollVoteSortWeight(left.voteType) - getPollVoteSortWeight(right.voteType);
+                        if (voteWeightDifference !== 0) {
+                          return voteWeightDifference;
+                        }
+
+                        return left.participantName.localeCompare(right.participantName);
+                      });
+
                     return (
-                      <div
-                        key={option.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-subtle px-3 py-2">
-                        <div>
-                          <p className="text-default text-sm font-medium">
-                            {t("poll_option_number", { number: index + 1 })}
-                          </p>
-                          <p className="text-muted text-xs">
-                            {new Date(option.startTime).toLocaleString()} -{" "}
-                            {new Date(option.endTime).toLocaleString()}
-                          </p>
-                          <p className="text-muted text-xs">
-                            {t("poll_option_vote_breakdown", {
-                              yes: voteCounts.yes,
-                              ifNeeded: voteCounts.ifNeeded,
-                              no: voteCounts.no,
-                            })}
-                          </p>
+                      <div key={option.id} className="rounded-md border border-subtle px-3 py-2">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-default text-sm font-medium">
+                              {t("poll_option_number", { number: index + 1 })}
+                            </p>
+                            <p className="text-muted text-xs">
+                              {new Date(option.startTime).toLocaleString()} -{" "}
+                              {new Date(option.endTime).toLocaleString()}
+                            </p>
+                            <p className="text-muted text-xs">
+                              {t("poll_option_vote_breakdown", {
+                                yes: voteCounts.yes,
+                                ifNeeded: voteCounts.ifNeeded,
+                                no: voteCounts.no,
+                              })}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {isFinalizedOption ? <Badge variant="blue">{t("poll_winner")}</Badge> : null}
+                            {poll.status === "OPEN" || poll.status === "CLOSED" ? (
+                              <Button
+                                type="button"
+                                color="minimal"
+                                loading={finalizePollMutation.isPending}
+                                disabled={finalizePollMutation.isPending}
+                                onClick={() =>
+                                  finalizePollMutation.mutate({
+                                    pollId: poll.id,
+                                    optionId: option.id,
+                                  })
+                                }>
+                                {t("finalize_with_option")}
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {isFinalizedOption ? <Badge variant="blue">{t("poll_winner")}</Badge> : null}
-                          {poll.status === "OPEN" || poll.status === "CLOSED" ? (
-                            <Button
-                              type="button"
-                              color="minimal"
-                              loading={finalizePollMutation.isPending}
-                              disabled={finalizePollMutation.isPending}
-                              onClick={() =>
-                                finalizePollMutation.mutate({
-                                  pollId: poll.id,
-                                  optionId: option.id,
-                                })
-                              }>
-                              {t("finalize_with_option")}
-                            </Button>
-                          ) : null}
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            size="xs"
+                            color="minimal"
+                            onClick={() => toggleOptionResponses(poll.id, option.id)}>
+                            {isResponsesExpanded ? t("poll_hide_responses") : t("poll_show_responses")}
+                          </Button>
                         </div>
+
+                        {isResponsesExpanded ? (
+                          <div className="mt-2 rounded-md border border-subtle bg-subtle p-2">
+                            {optionResponses.length > 0 ? (
+                              <div className="stack-y-2">
+                                {optionResponses.map((response) => (
+                                  <div
+                                    key={response.participantId}
+                                    className="border-subtle flex items-center justify-between gap-2 rounded-md border px-2 py-1">
+                                    <p className="text-default text-sm">{response.participantName}</p>
+                                    <Badge variant={getPollVoteVariant(response.voteType)}>
+                                      {getPollVoteLabel(response.voteType)}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-muted text-xs">{t("poll_no_option_responses_yet")}</p>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
                 </div>
+
+                {poll.visibility === "INVITE_ONLY" ? (
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h5 className="text-default text-sm font-semibold">{t("poll_invited_participants")}</h5>
+                    </div>
+                    <p className="text-muted mb-3 text-xs">{t("poll_invited_participants_edit_hint")}</p>
+
+                    {poll.participants.length > 0 ? (
+                      <div className="stack-y-3">
+                        {poll.participants.map((participant) => {
+                          const draft = getParticipantEditDraft(poll.id, participant);
+                          const normalizedDraftName = draft.name.trim();
+                          const normalizedDraftEmail = draft.email.trim().toLowerCase();
+                          const isDirty =
+                            normalizedDraftName !== participant.name ||
+                            normalizedDraftEmail !== participant.email.toLowerCase();
+
+                          return (
+                            <div key={participant.id} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+                              <TextField
+                                label={t("name")}
+                                value={draft.name}
+                                onChange={(event) =>
+                                  setParticipantEditField({
+                                    pollId: poll.id,
+                                    participantId: participant.id,
+                                    baseName: participant.name,
+                                    baseEmail: participant.email,
+                                    field: "name",
+                                    value: event.target.value,
+                                  })
+                                }
+                              />
+                              <TextField
+                                type="email"
+                                label={t("email")}
+                                value={draft.email}
+                                onChange={(event) =>
+                                  setParticipantEditField({
+                                    pollId: poll.id,
+                                    participantId: participant.id,
+                                    baseName: participant.name,
+                                    baseEmail: participant.email,
+                                    field: "email",
+                                    value: event.target.value,
+                                  })
+                                }
+                              />
+                              <div className="flex items-end">
+                                <Button
+                                  type="button"
+                                  color="secondary"
+                                  loading={updateParticipantMutation.isPending}
+                                  disabled={updateParticipantMutation.isPending || !isDirty}
+                                  onClick={() =>
+                                    saveParticipantUpdate({
+                                      pollId: poll.id,
+                                      participantId: participant.id,
+                                      baseName: participant.name,
+                                      baseEmail: participant.email,
+                                    })
+                                  }>
+                                  {t("save")}
+                                </Button>
+                              </div>
+                              <div className="flex items-end">
+                                <Button
+                                  type="button"
+                                  color="minimal"
+                                  loading={resendParticipantInviteMutation.isPending}
+                                  disabled={
+                                    updateParticipantMutation.isPending ||
+                                    resendParticipantInviteMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    requestResendParticipantInvite({
+                                      pollId: poll.id,
+                                      pollUid: poll.uid,
+                                      participantId: participant.id,
+                                      baseName: participant.name,
+                                      baseEmail: participant.email,
+                                    })
+                                  }>
+                                  {t("poll_resend_invite")}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-muted text-xs">{t("poll_no_participants_yet")}</p>
+                    )}
+                  </div>
+                ) : null}
 
                 {poll.status === "FINALIZED" && finalizedOption ? (
                   <p className="text-default mt-3 text-sm">
@@ -655,6 +1042,33 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
           description={t("no_polls_created_description")}
         />
       )}
+
+      <Dialog
+        open={Boolean(resendInviteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResendInviteTarget(null);
+          }
+        }}>
+        <ConfirmationDialogContent
+          isPending={resendParticipantInviteMutation.isPending}
+          title={t("poll_resend_invite_confirmation_title")}
+          confirmBtnText={t("poll_resend_invite")}
+          loadingText={t("poll_resend_invite")}
+          onConfirm={(event) => {
+            event.preventDefault();
+            confirmResendParticipantInvite();
+          }}>
+          <p className="mt-2 text-sm">
+            {resendInviteTarget
+              ? t("poll_resend_invite_confirmation_message", {
+                  name: resendInviteTarget.participantName,
+                  email: resendInviteTarget.participantEmail,
+                })
+              : ""}
+          </p>
+        </ConfirmationDialogContent>
+      </Dialog>
     </div>
   );
 };

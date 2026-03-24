@@ -92,7 +92,7 @@ describe("PollFinalizeBookingService", () => {
           noEmail: false,
           responses: expect.objectContaining({
             email: "alice@example.com",
-            name: "Alice",
+            name: "Poll participants",
             guests: ["bob@example.com"],
           }),
         }),

@@ -10,6 +10,7 @@ const pollDetailsSelect = {
   description: true,
   status: true,
   visibility: true,
+  isAnonymous: true,
   finalizationMode: true,
   organizerId: true,
   expiresAt: true,
@@ -96,6 +97,7 @@ type CreatePollInput = {
   description?: string | null;
   timeZone: string;
   visibility: "PUBLIC" | "INVITE_ONLY";
+  isAnonymous: boolean;
   finalizationMode: PollFinalizationMode;
   expiresAt?: Date | null;
   options: { startTime: Date; endTime: Date; position: number }[];
@@ -118,6 +120,7 @@ export class PollRepository {
         description: input.description ?? null,
         timeZone: input.timeZone,
         visibility: input.visibility,
+        isAnonymous: input.isAnonymous,
         finalizationMode: input.finalizationMode,
         expiresAt: input.expiresAt ?? null,
         options: {
@@ -341,6 +344,38 @@ export class PollRepository {
       },
       data: {
         status: "CLOSED",
+      },
+      select: pollDetailsSelect,
+    });
+  }
+
+  async updateParticipant({
+    pollId,
+    participantId,
+    name,
+    email,
+  }: {
+    pollId: number;
+    participantId: number;
+    name: string;
+    email: string;
+  }) {
+    await this.prismaClient.pollParticipant.update({
+      where: {
+        id: participantId,
+      },
+      data: {
+        name,
+        email,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return await this.prismaClient.poll.findUnique({
+      where: {
+        id: pollId,
       },
       select: pollDetailsSelect,
     });

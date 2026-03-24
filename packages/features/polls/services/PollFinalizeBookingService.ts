@@ -45,6 +45,8 @@ type PollFinalizeBookingServiceDeps = {
 };
 
 const YES_OR_IF_NEEDED: PollVoteType[] = ["YES", "IF_NEEDED"];
+const POLL_ATTENDEE_NAME = "Poll participants";
+
 function defaultIsIdempotencyConflictError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -146,7 +148,7 @@ export class PollFinalizeBookingService {
 
     const responses: Record<string, unknown> = {
       email: primaryParticipant.email,
-      name: primaryParticipant.name.trim() || primaryParticipant.email,
+      name: POLL_ATTENDEE_NAME,
       guests: guestParticipants.map((participant) => participant.email),
     };
 
