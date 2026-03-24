@@ -2007,6 +2007,7 @@
   "poll_uid_hint": "Poll ID: {{uid}}",
   "no_polls_created": "No polls yet",
   "no_polls_created_description": "Create your first poll to collect attendee availability.",
+  "poll_no_participants_yet": "No participants added yet.",
   "today": "Today",
   "this_month": "This month",
   "time": "Time",
