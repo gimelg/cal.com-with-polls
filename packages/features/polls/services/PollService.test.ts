@@ -96,17 +96,29 @@ const buildPoll = (overrides?: Partial<PollRecord>): PollRecord => {
 
 const buildService = ({
   getPollByUid,
+  getPollById,
   getPollByIdAndOrganizerId,
+  finalizePoll,
   updateParticipant,
+  reopenPoll,
+  cancelPoll,
 }: {
   getPollByUid?: ReturnType<typeof vi.fn>;
+  getPollById?: ReturnType<typeof vi.fn>;
   getPollByIdAndOrganizerId?: ReturnType<typeof vi.fn>;
+  finalizePoll?: ReturnType<typeof vi.fn>;
   updateParticipant?: ReturnType<typeof vi.fn>;
+  reopenPoll?: ReturnType<typeof vi.fn>;
+  cancelPoll?: ReturnType<typeof vi.fn>;
 }) => {
   const pollRepository = {
     getPollByUid: getPollByUid ?? vi.fn(),
+    getPollById: getPollById ?? vi.fn(),
     getPollByIdAndOrganizerId: getPollByIdAndOrganizerId ?? vi.fn(),
+    finalizePoll: finalizePoll ?? vi.fn(),
     updateParticipant: updateParticipant ?? vi.fn(),
+    reopenPoll: reopenPoll ?? vi.fn(),
+    cancelPoll: cancelPoll ?? vi.fn(),
   };
 
   const service = new PollService({
@@ -248,6 +260,187 @@ describe("PollService", () => {
         expect(errorWithCode.code).toBe(ErrorCode.BadRequest);
         expect(errorWithCode.message).toBe("A participant with this email already exists in this poll");
       }
+    });
+  });
+
+  describe("reopenPollManually", () => {
+    it("reopens a closed poll", async () => {
+      const closedPoll = buildPoll({ status: "CLOSED" });
+      const reopenedPoll = buildPoll({ status: "OPEN" });
+
+      const { service, pollRepository } = buildService({
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(closedPoll),
+        reopenPoll: vi.fn().mockResolvedValue(reopenedPoll),
+      });
+
+      const result = await service.reopenPollManually({
+        pollId: closedPoll.id,
+        organizerId: closedPoll.organizerId,
+      });
+
+      expect(result).toEqual(reopenedPoll);
+      expect(pollRepository.reopenPoll).toHaveBeenCalledWith(closedPoll.id);
+    });
+
+    it("rejects reopening a finalized poll", async () => {
+      const finalizedPoll = buildPoll({ status: "FINALIZED" });
+      const { service } = buildService({
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(finalizedPoll),
+      });
+
+      await expect(
+        service.reopenPollManually({
+          pollId: finalizedPoll.id,
+          organizerId: finalizedPoll.organizerId,
+        })
+      ).rejects.toThrow("Only closed polls can be reopened");
+    });
+  });
+
+  describe("cancelPollManually", () => {
+    it("cancels an open poll", async () => {
+      const openPoll = buildPoll({ status: "OPEN" });
+      const cancelledPoll = buildPoll({ status: "CANCELLED" });
+
+      const { service, pollRepository } = buildService({
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(openPoll),
+        cancelPoll: vi.fn().mockResolvedValue(cancelledPoll),
+      });
+
+      const result = await service.cancelPollManually({
+        pollId: openPoll.id,
+        organizerId: openPoll.organizerId,
+      });
+
+      expect(result).toEqual(cancelledPoll);
+      expect(pollRepository.cancelPoll).toHaveBeenCalledWith(openPoll.id);
+    });
+
+    it("rejects cancelling a finalized poll", async () => {
+      const finalizedPoll = buildPoll({ status: "FINALIZED" });
+      const { service } = buildService({
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(finalizedPoll),
+      });
+
+      await expect(
+        service.cancelPollManually({
+          pollId: finalizedPoll.id,
+          organizerId: finalizedPoll.organizerId,
+        })
+      ).rejects.toThrow("Finalized polls cannot be cancelled");
+    });
+  });
+
+  describe("poll finalized notifications", () => {
+    it("sends notifications after manual finalization", async () => {
+      const openPoll = buildPoll({ status: "OPEN" });
+      const finalizedPoll = buildPoll({ status: "FINALIZED", finalizedOptionId: 11 });
+      const onPollFinalized = vi.fn().mockResolvedValue(undefined);
+
+      const pollRepository = {
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(openPoll),
+        getPollById: vi.fn().mockResolvedValue(openPoll),
+        finalizePoll: vi.fn().mockResolvedValue(finalizedPoll),
+      };
+
+      const serviceWithNotifications = new PollService({
+        pollRepository: pollRepository as never,
+        onFinalize: vi.fn().mockResolvedValue({ bookingId: null }),
+        onPollFinalized,
+      });
+
+      const result = await serviceWithNotifications.finalizePollManually({
+        pollId: openPoll.id,
+        organizerId: openPoll.organizerId,
+        optionId: 11,
+      });
+
+      expect(result).toEqual(finalizedPoll);
+      expect(onPollFinalized).toHaveBeenCalledWith({
+        pollId: openPoll.id,
+        pollOptionId: 11,
+      });
+    });
+
+    it("does not fail finalization when notifications fail", async () => {
+      const openPoll = buildPoll({ status: "OPEN" });
+      const finalizedPoll = buildPoll({ status: "FINALIZED", finalizedOptionId: 11 });
+      const pollRepository = {
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(openPoll),
+        getPollById: vi.fn().mockResolvedValue(openPoll),
+        finalizePoll: vi.fn().mockResolvedValue(finalizedPoll),
+      };
+
+      const service = new PollService({
+        pollRepository: pollRepository as never,
+        onFinalize: vi.fn().mockResolvedValue({ bookingId: null }),
+        onPollFinalized: vi.fn().mockRejectedValue(new Error("email send failed")),
+      });
+
+      const result = await service.finalizePollManually({
+        pollId: openPoll.id,
+        organizerId: openPoll.organizerId,
+        optionId: 11,
+      });
+
+      expect(result).toEqual(finalizedPoll);
+    });
+
+    it("sends notifications after auto-finalization from vote submit", async () => {
+      const startingPoll = buildPoll({
+        status: "OPEN",
+        finalizationMode: "MAJORITY",
+        participants: [{ id: 21, name: "Alex", email: "alex@example.com" }],
+        votes: [],
+      });
+
+      const refreshedPoll = buildPoll({
+        status: "OPEN",
+        finalizationMode: "MAJORITY",
+        participants: [{ id: 21, name: "Alex", email: "alex@example.com" }],
+        votes: [{ pollOptionId: 11, participantId: 21, voteType: "YES" }],
+      });
+
+      const finalizedPoll = buildPoll({
+        status: "FINALIZED",
+        finalizationMode: "MAJORITY",
+        participants: [{ id: 21, name: "Alex", email: "alex@example.com" }],
+        votes: [{ pollOptionId: 11, participantId: 21, voteType: "YES" }],
+        finalizedOptionId: 11,
+      });
+
+      const onPollFinalized = vi.fn().mockResolvedValue(undefined);
+
+      const pollRepository = {
+        getPollByUid: vi
+          .fn()
+          .mockResolvedValueOnce(startingPoll)
+          .mockResolvedValueOnce(refreshedPoll),
+        deleteVotesForParticipant: vi.fn().mockResolvedValue(undefined),
+        upsertVote: vi.fn().mockResolvedValue({ id: 1 }),
+        getPollById: vi.fn().mockResolvedValue(refreshedPoll),
+        finalizePoll: vi.fn().mockResolvedValue(finalizedPoll),
+      };
+
+      const service = new PollService({
+        pollRepository: pollRepository as never,
+        onFinalize: vi.fn().mockResolvedValue({ bookingId: null }),
+        onPollFinalized,
+      });
+
+      await service.submitVotes({
+        pollUid: startingPoll.uid,
+        participant: {
+          name: "Alex",
+          email: "alex@example.com",
+        },
+        votes: [{ optionId: 11, voteType: "YES" }],
+      });
+
+      expect(onPollFinalized).toHaveBeenCalledWith({
+        pollId: refreshedPoll.id,
+        pollOptionId: 11,
+      });
     });
   });
 });

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createPollMock = vi.fn();
 const getPollByUidForOrganizerMock = vi.fn();
 const updatePollParticipantForOrganizerMock = vi.fn();
+const reopenPollManuallyMock = vi.fn();
+const cancelPollManuallyMock = vi.fn();
 const sendPollInviteEmailMock = vi.fn();
 const getUserSessionMock = vi.fn();
 const getTranslationMock = vi.fn();
@@ -20,6 +22,8 @@ vi.mock("@calcom/features/polls/services/PollService", () => ({
     createPoll = createPollMock;
     getPollByUidForOrganizer = getPollByUidForOrganizerMock;
     updatePollParticipantForOrganizer = updatePollParticipantForOrganizerMock;
+    reopenPollManually = reopenPollManuallyMock;
+    cancelPollManually = cancelPollManuallyMock;
   },
 }));
 
@@ -172,5 +176,43 @@ describe("viewer polls router", () => {
         participantId: 21,
       })
     ).rejects.toThrow("Only invite-only polls support participant invite emails");
+  });
+
+  it("reopens a poll for the organizer", async () => {
+    reopenPollManuallyMock.mockResolvedValue({
+      id: 1,
+      status: "OPEN",
+    });
+
+    const caller = makeCaller();
+
+    const result = await caller.reopen({
+      pollId: 1,
+    });
+
+    expect(result).toEqual({ id: 1, status: "OPEN" });
+    expect(reopenPollManuallyMock).toHaveBeenCalledWith({
+      pollId: 1,
+      organizerId: 10,
+    });
+  });
+
+  it("cancels a poll for the organizer", async () => {
+    cancelPollManuallyMock.mockResolvedValue({
+      id: 1,
+      status: "CANCELLED",
+    });
+
+    const caller = makeCaller();
+
+    const result = await caller.cancel({
+      pollId: 1,
+    });
+
+    expect(result).toEqual({ id: 1, status: "CANCELLED" });
+    expect(cancelPollManuallyMock).toHaveBeenCalledWith({
+      pollId: 1,
+      organizerId: 10,
+    });
   });
 });

@@ -90,6 +90,39 @@ const pollFinalizeContextSelect = {
   },
 } satisfies Prisma.PollSelect;
 
+const pollNotificationContextSelect = {
+  id: true,
+  uid: true,
+  title: true,
+  description: true,
+  timeZone: true,
+  organizer: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      locale: true,
+    },
+  },
+  participants: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+    orderBy: {
+      id: "asc" as const,
+    },
+  },
+  options: {
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+    },
+  },
+} satisfies Prisma.PollSelect;
+
 type CreatePollInput = {
   eventTypeId: number;
   organizerId: number;
@@ -235,6 +268,13 @@ export class PollRepository {
     });
   }
 
+  async getPollNotificationContextById(id: number) {
+    return await this.prismaClient.poll.findUnique({
+      where: { id },
+      select: pollNotificationContextSelect,
+    });
+  }
+
   async upsertParticipant({ pollId, email, name }: { pollId: number; email: string; name: string }) {
     return await this.prismaClient.pollParticipant.upsert({
       where: {
@@ -349,6 +389,30 @@ export class PollRepository {
     });
   }
 
+  async reopenPoll(pollId: number) {
+    return await this.prismaClient.poll.update({
+      where: {
+        id: pollId,
+      },
+      data: {
+        status: "OPEN",
+      },
+      select: pollDetailsSelect,
+    });
+  }
+
+  async cancelPoll(pollId: number) {
+    return await this.prismaClient.poll.update({
+      where: {
+        id: pollId,
+      },
+      data: {
+        status: "CANCELLED",
+      },
+      select: pollDetailsSelect,
+    });
+  }
+
   async updateParticipant({
     pollId,
     participantId,
@@ -388,4 +452,8 @@ export type PollDetails = Prisma.PollGetPayload<{
 
 export type PollFinalizeContext = Prisma.PollGetPayload<{
   select: typeof pollFinalizeContextSelect;
+}>;
+
+export type PollNotificationContext = Prisma.PollGetPayload<{
+  select: typeof pollNotificationContextSelect;
 }>;
