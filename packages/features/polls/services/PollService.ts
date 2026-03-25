@@ -1,3 +1,6 @@
+import { sendPollFinalizedEmail } from "@calcom/emails/poll-email-service";
+import { getTranslation } from "@calcom/i18n/server";
+import { WEBAPP_URL } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
 import type { Prisma } from "@calcom/prisma/client";
@@ -16,10 +19,16 @@ type PollFinalizeCallbackOutput = {
   bookingId: number | null;
 };
 
+type PollFinalizedNotificationCallbackInput = {
+  pollId: number;
+  pollOptionId: number;
+};
+
 type PollServiceDeps = {
   pollRepository?: PollRepository;
   pollFinalizeBookingService?: PollFinalizeBookingService;
   onFinalize?: (input: PollFinalizeCallbackInput) => Promise<PollFinalizeCallbackOutput>;
+  onPollFinalized?: (input: PollFinalizedNotificationCallbackInput) => Promise<void>;
 };
 
 type CreatePollInput = {
@@ -51,6 +60,7 @@ type SubmitVoteInput = {
 export class PollService {
   private readonly pollRepository: PollRepository;
   private readonly onFinalize: (input: PollFinalizeCallbackInput) => Promise<PollFinalizeCallbackOutput>;
+  private readonly onPollFinalized: (input: PollFinalizedNotificationCallbackInput) => Promise<void>;
 
   constructor(deps?: PollServiceDeps) {
     this.pollRepository = deps?.pollRepository ?? PollRepository.create();
@@ -64,6 +74,77 @@ export class PollService {
       deps?.onFinalize ??
       (async (input) => {
         return await pollFinalizeBookingService.createBookingForFinalizedPoll(input);
+      });
+
+    this.onPollFinalized =
+      deps?.onPollFinalized ??
+      (async ({ pollId, pollOptionId }) => {
+        const poll = await this.pollRepository.getPollNotificationContextById(pollId);
+        if (!poll) {
+          return;
+        }
+
+        const selectedOption = poll.options.find((option) => option.id === pollOptionId);
+        if (!selectedOption) {
+          return;
+        }
+
+        const organizerName = poll.organizer.name || poll.organizer.email;
+        const organizerLocale = poll.organizer.locale || "en";
+        const t = await getTranslation(organizerLocale, "common");
+        const pollLink = new URL(`/poll/${poll.uid}`, WEBAPP_URL).toString();
+        const selectedSlot = formatPollFinalizedSlot({
+          startTime: selectedOption.startTime,
+          endTime: selectedOption.endTime,
+          timeZone: poll.timeZone,
+          locale: organizerLocale,
+        });
+
+        const recipientEntries = [
+          {
+            email: poll.organizer.email,
+            name: organizerName,
+            role: "ORGANIZER" as const,
+          },
+          ...poll.participants
+            .filter((participant) => !isPollAliasEmail(participant.email))
+            .map((participant) => ({
+              email: participant.email,
+              name: participant.name,
+              role: "PARTICIPANT" as const,
+            })),
+        ];
+
+        const recipientsByEmail = new Map<string, (typeof recipientEntries)[number]>();
+        for (const recipient of recipientEntries) {
+          const normalizedEmail = recipient.email.toLowerCase();
+          if (recipientsByEmail.has(normalizedEmail) && recipient.role !== "ORGANIZER") {
+            continue;
+          }
+
+          recipientsByEmail.set(normalizedEmail, recipient);
+        }
+
+        const sendResults = await Promise.allSettled(
+          Array.from(recipientsByEmail.values()).map(async (recipient) => {
+            await sendPollFinalizedEmail({
+              to: recipient.email,
+              recipientName: recipient.name,
+              recipientRole: recipient.role,
+              pollTitle: poll.title,
+              pollDescription: poll.description,
+              selectedSlot,
+              pollLink,
+              t,
+            });
+          })
+        );
+
+        sendResults.forEach((result) => {
+          if (result.status === "rejected") {
+            console.error("Failed sending poll finalized email", result.reason);
+          }
+        });
       });
   }
 
@@ -326,6 +407,40 @@ export class PollService {
     throw new ErrorWithCode(ErrorCode.BadRequest, "Only open polls can be closed");
   }
 
+  async reopenPollManually({ pollId, organizerId }: { pollId: number; organizerId: number }) {
+    const poll = await this.pollRepository.getPollByIdAndOrganizerId(pollId, organizerId);
+    if (!poll) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found");
+    }
+
+    if (poll.status === "CLOSED") {
+      return await this.pollRepository.reopenPoll(pollId);
+    }
+
+    if (poll.status === "OPEN") {
+      return poll;
+    }
+
+    throw new ErrorWithCode(ErrorCode.BadRequest, "Only closed polls can be reopened");
+  }
+
+  async cancelPollManually({ pollId, organizerId }: { pollId: number; organizerId: number }) {
+    const poll = await this.pollRepository.getPollByIdAndOrganizerId(pollId, organizerId);
+    if (!poll) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found");
+    }
+
+    if (poll.status === "OPEN" || poll.status === "CLOSED") {
+      return await this.pollRepository.cancelPoll(pollId);
+    }
+
+    if (poll.status === "CANCELLED") {
+      return poll;
+    }
+
+    throw new ErrorWithCode(ErrorCode.BadRequest, "Finalized polls cannot be cancelled");
+  }
+
   async updatePollParticipantForOrganizer({
     pollId,
     organizerId,
@@ -428,12 +543,23 @@ export class PollService {
 
     const finalizeResponse = await this.onFinalize({ pollId, pollOptionId: optionId });
 
-    return await this.pollRepository.finalizePoll({
+    const finalizedPoll = await this.pollRepository.finalizePoll({
       pollId,
       finalizedById,
       finalizedOptionId: optionId,
       finalizedBookingId: finalizeResponse.bookingId,
     });
+
+    try {
+      await this.onPollFinalized({
+        pollId: finalizedPoll.id,
+        pollOptionId: optionId,
+      });
+    } catch (error) {
+      console.error("Poll finalized, but notification emails failed", error);
+    }
+
+    return finalizedPoll;
   }
 
   private validateCreatePollInput(input: CreatePollInput) {
@@ -460,4 +586,30 @@ export class PollService {
 
 export function shouldAutoFinalize(result: PollAutoFinalizeResult) {
   return result.shouldFinalize && result.winningOptionId !== null;
+}
+
+function formatPollFinalizedSlot({
+  startTime,
+  endTime,
+  timeZone,
+  locale,
+}: {
+  startTime: Date;
+  endTime: Date;
+  timeZone: string;
+  locale: string;
+}) {
+  const dateFormatOptions: Intl.DateTimeFormatOptions = {
+    timeZone,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  const formattedStart = new Intl.DateTimeFormat(locale, dateFormatOptions).format(startTime);
+  const formattedEnd = new Intl.DateTimeFormat(locale, dateFormatOptions).format(endTime);
+
+  return `${formattedStart} - ${formattedEnd} (${timeZone})`;
 }

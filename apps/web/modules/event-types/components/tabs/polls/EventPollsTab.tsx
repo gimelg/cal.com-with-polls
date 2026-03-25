@@ -42,6 +42,11 @@ type ResendInviteTarget = {
   participantEmail: string;
 };
 
+type CancelPollTarget = {
+  pollId: number;
+  pollTitle: string;
+};
+
 type ParticipantIdentityMode = "NAME_AND_EMAIL" | "NAME_ONLY";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -122,6 +127,17 @@ const getPollVoteSortWeight = (voteType: PollItem["votes"][number]["voteType"]) 
   return 2;
 };
 
+const getPollPublicPath = (uid: string) => `/poll/${uid}`;
+
+const getPollPublicUrl = (uid: string) => {
+  const path = getPollPublicPath(uid);
+  if (typeof window === "undefined") {
+    return path;
+  }
+
+  return new URL(path, window.location.origin).toString();
+};
+
 export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
   const { t } = useLocale();
   const utils = trpc.useUtils();
@@ -145,6 +161,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
   const [participantEdits, setParticipantEdits] = useState<Record<string, ParticipantEditDraft>>({});
   const [expandedOptionResponses, setExpandedOptionResponses] = useState<Record<string, boolean>>({});
   const [resendInviteTarget, setResendInviteTarget] = useState<ResendInviteTarget | null>(null);
+  const [cancelPollTarget, setCancelPollTarget] = useState<CancelPollTarget | null>(null);
   const [optionDrafts, setOptionDrafts] = useState<DraftOption[]>([
     createOptionDraft(1, eventLengthMinutes, 1),
     createOptionDraft(2, eventLengthMinutes, 2),
@@ -195,6 +212,27 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
   const closePollMutation = trpc.viewer.polls.close.useMutation({
     onSuccess: async () => {
       showToast(t("poll_closed_successfully"), "success");
+      await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
+    },
+    onError: (error) => {
+      showToast(error.message, "error");
+    },
+  });
+
+  const reopenPollMutation = trpc.viewer.polls.reopen.useMutation({
+    onSuccess: async () => {
+      showToast(t("poll_reopened_successfully"), "success");
+      await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
+    },
+    onError: (error) => {
+      showToast(error.message, "error");
+    },
+  });
+
+  const cancelPollMutation = trpc.viewer.polls.cancel.useMutation({
+    onSuccess: async () => {
+      setCancelPollTarget(null);
+      showToast(t("poll_cancelled_successfully"), "success");
       await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
     },
     onError: (error) => {
@@ -504,12 +542,31 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     });
   };
 
+  const confirmCancelPoll = () => {
+    if (!cancelPollTarget) {
+      return;
+    }
+
+    cancelPollMutation.mutate({
+      pollId: cancelPollTarget.pollId,
+    });
+  };
+
   const toggleOptionResponses = (pollId: number, optionId: number) => {
     const key = getOptionResponseToggleKey(pollId, optionId);
     setExpandedOptionResponses((previous) => ({
       ...previous,
       [key]: !previous[key],
     }));
+  };
+
+  const copyPollUrl = async (pollUid: string) => {
+    try {
+      await navigator.clipboard.writeText(getPollPublicUrl(pollUid));
+      showToast(t("poll_link_copied"), "success");
+    } catch {
+      showToast(t("something_went_wrong"), "error");
+    }
   };
 
   return (
@@ -794,17 +851,74 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                       })}
                     </p>
                   </div>
-                  {poll.status === "OPEN" ? (
-                    <Button
-                      type="button"
-                      color="secondary"
-                      StartIcon="lock"
-                      loading={closePollMutation.isPending}
-                      disabled={closePollMutation.isPending}
-                      onClick={() => closePollMutation.mutate({ pollId: poll.id })}>
-                      {t("close_poll")}
-                    </Button>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {poll.status === "OPEN" ? (
+                      <>
+                        <Button
+                          type="button"
+                          color="secondary"
+                          StartIcon="lock"
+                          loading={closePollMutation.isPending}
+                          disabled={
+                            closePollMutation.isPending ||
+                            reopenPollMutation.isPending ||
+                            cancelPollMutation.isPending
+                          }
+                          onClick={() => closePollMutation.mutate({ pollId: poll.id })}>
+                          {t("close_poll")}
+                        </Button>
+                        <Button
+                          type="button"
+                          color="minimal"
+                          disabled={
+                            closePollMutation.isPending ||
+                            reopenPollMutation.isPending ||
+                            cancelPollMutation.isPending
+                          }
+                          onClick={() =>
+                            setCancelPollTarget({
+                              pollId: poll.id,
+                              pollTitle: poll.title,
+                            })
+                          }>
+                          {t("cancel_poll")}
+                        </Button>
+                      </>
+                    ) : null}
+
+                    {poll.status === "CLOSED" ? (
+                      <>
+                        <Button
+                          type="button"
+                          color="secondary"
+                          disabled={
+                            closePollMutation.isPending ||
+                            reopenPollMutation.isPending ||
+                            cancelPollMutation.isPending
+                          }
+                          loading={reopenPollMutation.isPending}
+                          onClick={() => reopenPollMutation.mutate({ pollId: poll.id })}>
+                          {t("reopen_poll")}
+                        </Button>
+                        <Button
+                          type="button"
+                          color="minimal"
+                          disabled={
+                            closePollMutation.isPending ||
+                            reopenPollMutation.isPending ||
+                            cancelPollMutation.isPending
+                          }
+                          onClick={() =>
+                            setCancelPollTarget({
+                              pollId: poll.id,
+                              pollTitle: poll.title,
+                            })
+                          }>
+                          {t("cancel_poll")}
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="stack-y-2">
@@ -1030,7 +1144,25 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   </p>
                 ) : null}
 
-                <p className="text-muted mt-2 text-xs">{t("poll_uid_hint", { uid: poll.uid })}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <p className="text-muted text-xs">{t("poll_uid_hint", { uid: poll.uid })}</p>
+                  <a
+                    className="text-xs text-blue-600 hover:underline"
+                    href={getPollPublicPath(poll.uid)}
+                    target="_blank"
+                    rel="noreferrer">
+                    {getPollPublicPath(poll.uid)}
+                  </a>
+                  <Button
+                    type="button"
+                    size="xs"
+                    color="minimal"
+                    onClick={() => {
+                      void copyPollUrl(poll.uid);
+                    }}>
+                    {t("poll_copy_link")}
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -1064,6 +1196,32 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
               ? t("poll_resend_invite_confirmation_message", {
                   name: resendInviteTarget.participantName,
                   email: resendInviteTarget.participantEmail,
+                })
+              : ""}
+          </p>
+        </ConfirmationDialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(cancelPollTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelPollTarget(null);
+          }
+        }}>
+        <ConfirmationDialogContent
+          isPending={cancelPollMutation.isPending}
+          title={t("poll_cancel_confirmation_title")}
+          confirmBtnText={t("cancel_poll")}
+          loadingText={t("cancel_poll")}
+          onConfirm={(event) => {
+            event.preventDefault();
+            confirmCancelPoll();
+          }}>
+          <p className="mt-2 text-sm">
+            {cancelPollTarget
+              ? t("poll_cancel_confirmation_message", {
+                  title: cancelPollTarget.pollTitle,
                 })
               : ""}
           </p>

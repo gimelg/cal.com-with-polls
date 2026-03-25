@@ -58,7 +58,13 @@ vi.mock("@calcom/ui/components/empty-screen", () => ({
 }));
 
 vi.mock("@calcom/ui/components/form", () => ({
-  TextField: ({ label, value, onChange, type = "text", placeholder }: ComponentProps<"input"> & {
+  TextField: ({
+    label,
+    value,
+    onChange,
+    type = "text",
+    placeholder,
+  }: ComponentProps<"input"> & {
     label: string;
   }) => (
     <label>
@@ -158,5 +164,22 @@ describe("PublicPollPage", () => {
     expect(screen.getByText("Alex submitted for Sprint planning")).toBeInTheDocument();
     expect(screen.getByText("poll_vote_submitted_close_hint")).toBeInTheDocument();
     expect(screen.queryByText("poll_vote_section_title")).not.toBeInTheDocument();
+  });
+
+  it("blocks voting when poll is cancelled", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => buildGetByUidResponse(buildPoll({ status: "CANCELLED" })),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PublicPollPage uid="poll_123" />);
+
+    expect(await screen.findByText("Sprint planning")).toBeInTheDocument();
+    expect(screen.getByText("poll_vote_cancelled")).toBeInTheDocument();
+    expect(screen.queryByText("poll_vote_submit")).not.toBeInTheDocument();
   });
 });

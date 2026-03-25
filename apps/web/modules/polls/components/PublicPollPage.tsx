@@ -170,6 +170,8 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
     votingBlockedReason = t("poll_vote_finalized");
   } else if (poll.status === "CLOSED") {
     votingBlockedReason = t("poll_vote_closed");
+  } else if (poll.status === "CANCELLED") {
+    votingBlockedReason = t("poll_vote_cancelled");
   } else if (pollIsExpired) {
     votingBlockedReason = t("poll_vote_expired");
   }

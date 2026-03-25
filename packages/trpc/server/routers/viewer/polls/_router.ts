@@ -49,6 +49,14 @@ const closePollSchema = z.object({
   pollId: z.number().int().positive(),
 });
 
+const reopenPollSchema = z.object({
+  pollId: z.number().int().positive(),
+});
+
+const cancelPollSchema = z.object({
+  pollId: z.number().int().positive(),
+});
+
 const updateParticipantSchema = z.object({
   pollId: z.number().int().positive(),
   participantId: z.number().int().positive(),
@@ -193,6 +201,20 @@ export const pollsRouter = router({
   close: authedProcedure.input(closePollSchema).mutation(async ({ ctx, input }) => {
     const pollService = new PollService();
     return await pollService.closePollManually({
+      pollId: input.pollId,
+      organizerId: ctx.user.id,
+    });
+  }),
+  reopen: authedProcedure.input(reopenPollSchema).mutation(async ({ ctx, input }) => {
+    const pollService = new PollService();
+    return await pollService.reopenPollManually({
+      pollId: input.pollId,
+      organizerId: ctx.user.id,
+    });
+  }),
+  cancel: authedProcedure.input(cancelPollSchema).mutation(async ({ ctx, input }) => {
+    const pollService = new PollService();
+    return await pollService.cancelPollManually({
       pollId: input.pollId,
       organizerId: ctx.user.id,
     });

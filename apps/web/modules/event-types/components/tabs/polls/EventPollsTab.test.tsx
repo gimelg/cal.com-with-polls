@@ -1,7 +1,7 @@
+import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
 import { EventPollsTab } from "./EventPollsTab";
 
 const listByEventTypeUseQueryMock = vi.fn();
@@ -51,6 +51,12 @@ vi.mock("@calcom/trpc/react", () => ({
         close: {
           useMutation: () => ({ mutate: vi.fn(), isPending: false }),
         },
+        reopen: {
+          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        },
+        cancel: {
+          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        },
         updateParticipant: {
           useMutation: () => ({ mutate: vi.fn(), isPending: false }),
         },
@@ -95,7 +101,15 @@ vi.mock("@calcom/ui/components/form", () => ({
       <textarea value={value as string} onChange={onChange} />
     </label>
   ),
-  CheckboxField: ({ description, checked, onChange }: { description: string; checked: boolean; onChange: (event: { target: { checked: boolean } }) => void }) => (
+  CheckboxField: ({
+    description,
+    checked,
+    onChange,
+  }: {
+    description: string;
+    checked: boolean;
+    onChange: (event: { target: { checked: boolean } }) => void;
+  }) => (
     <label>
       {description}
       <input
@@ -174,6 +188,8 @@ describe("EventPollsTab", () => {
     render(<EventPollsTab eventType={eventTypeFixture} />);
 
     expect(screen.queryByText("Alex")).not.toBeInTheDocument();
+    expect(screen.getByText("/poll/poll_1")).toBeInTheDocument();
+    expect(screen.getByText("poll_copy_link")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("poll_show_responses"));
 
@@ -183,5 +199,45 @@ describe("EventPollsTab", () => {
     fireEvent.click(screen.getByText("poll_hide_responses"));
 
     expect(screen.queryByText("Alex")).not.toBeInTheDocument();
+  });
+
+  it("shows reopen and cancel actions for closed polls", () => {
+    listByEventTypeUseQueryMock.mockReturnValue({
+      isPending: false,
+      data: [
+        {
+          id: 2,
+          uid: "poll_2",
+          title: "Closed poll",
+          description: null,
+          status: "CLOSED",
+          visibility: "PUBLIC",
+          isAnonymous: false,
+          finalizationMode: "MANUAL",
+          organizerId: 10,
+          expiresAt: null,
+          finalizedAt: null,
+          finalizedById: null,
+          finalizedOptionId: null,
+          finalizedBookingId: null,
+          options: [
+            {
+              id: 31,
+              startTime: new Date("2026-04-05T10:00:00.000Z"),
+              endTime: new Date("2026-04-05T10:30:00.000Z"),
+              position: 0,
+            },
+          ],
+          participants: [],
+          votes: [],
+        },
+      ],
+    });
+
+    render(<EventPollsTab eventType={eventTypeFixture} />);
+
+    expect(screen.getByText("reopen_poll")).toBeInTheDocument();
+    expect(screen.getByText("cancel_poll")).toBeInTheDocument();
+    expect(screen.queryByText("close_poll")).not.toBeInTheDocument();
   });
 });
