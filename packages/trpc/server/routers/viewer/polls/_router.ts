@@ -82,6 +82,19 @@ const buildPollInviteLink = ({ pollUid, name, email }: { pollUid: string; name: 
   return pollLink.toString();
 };
 
+const redactEmailForLogs = (email: string) => {
+  const [localPart, domainPart] = email.split("@");
+  if (!domainPart) {
+    return "[invalid-email]";
+  }
+
+  if (localPart.length <= 2) {
+    return `${localPart.slice(0, 1)}***@${domainPart}`;
+  }
+
+  return `${localPart.slice(0, 2)}***${localPart.slice(-1)}@${domainPart}`;
+};
+
 export const pollsRouter = router({
   create: authedProcedure.input(createPollSchema).mutation(async ({ ctx, input }) => {
     const pollService = new PollService();
@@ -96,23 +109,64 @@ export const pollsRouter = router({
       const organizerName = ctx.user.name || ctx.user.email;
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
+      console.info("[polls] Sending invite emails", {
+        action: "polls.create",
+        organizerId: ctx.user.id,
+        pollId: poll.id,
+        pollUid: poll.uid,
+        participantCount: poll.participants.length,
+      });
+
       const inviteResults = await Promise.allSettled(
         poll.participants.map(async (participant) => {
-          await sendPollInviteEmail({
-            to: participant.email,
-            organizerName,
-            participantName: participant.name,
-            pollTitle: poll.title,
-            pollDescription: poll.description,
-            pollLink: buildPollInviteLink({
+          const startedAt = Date.now();
+          try {
+            await sendPollInviteEmail({
+              to: participant.email,
+              organizerName,
+              participantName: participant.name,
+              pollTitle: poll.title,
+              pollDescription: poll.description,
+              pollLink: buildPollInviteLink({
+                pollUid: poll.uid,
+                name: participant.name,
+                email: participant.email,
+              }),
+              t,
+            });
+
+            console.info("[polls] Invite email sent", {
+              action: "polls.create",
+              pollId: poll.id,
               pollUid: poll.uid,
-              name: participant.name,
-              email: participant.email,
-            }),
-            t,
-          });
+              participantId: participant.id,
+              participantEmail: redactEmailForLogs(participant.email),
+              durationMs: Date.now() - startedAt,
+            });
+          } catch (error) {
+            console.error("[polls] Invite email failed", {
+              action: "polls.create",
+              pollId: poll.id,
+              pollUid: poll.uid,
+              participantId: participant.id,
+              participantEmail: redactEmailForLogs(participant.email),
+              durationMs: Date.now() - startedAt,
+              error,
+            });
+
+            throw error;
+          }
         })
       );
+
+      const failedInviteCount = inviteResults.filter((result) => result.status === "rejected").length;
+      console.info("[polls] Invite sending completed", {
+        action: "polls.create",
+        pollId: poll.id,
+        pollUid: poll.uid,
+        participantCount: poll.participants.length,
+        failedInviteCount,
+      });
 
       inviteResults.forEach((result) => {
         if (result.status === "rejected") {
@@ -153,19 +207,52 @@ export const pollsRouter = router({
       const organizerName = ctx.user.name || ctx.user.email;
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
-      await sendPollInviteEmail({
-        to: participant.email,
-        organizerName,
-        participantName: participant.name,
-        pollTitle: poll.title,
-        pollDescription: poll.description,
-        pollLink: buildPollInviteLink({
-          pollUid: poll.uid,
-          name: participant.name,
-          email: participant.email,
-        }),
-        t,
+      const startedAt = Date.now();
+      console.info("[polls] Sending invite email", {
+        action: "polls.addParticipant",
+        organizerId: ctx.user.id,
+        pollId: poll.id,
+        pollUid: poll.uid,
+        participantId: participant.id,
+        participantEmail: redactEmailForLogs(participant.email),
       });
+
+      try {
+        await sendPollInviteEmail({
+          to: participant.email,
+          organizerName,
+          participantName: participant.name,
+          pollTitle: poll.title,
+          pollDescription: poll.description,
+          pollLink: buildPollInviteLink({
+            pollUid: poll.uid,
+            name: participant.name,
+            email: participant.email,
+          }),
+          t,
+        });
+
+        console.info("[polls] Invite email sent", {
+          action: "polls.addParticipant",
+          pollId: poll.id,
+          pollUid: poll.uid,
+          participantId: participant.id,
+          participantEmail: redactEmailForLogs(participant.email),
+          durationMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        console.error("[polls] Invite email failed", {
+          action: "polls.addParticipant",
+          pollId: poll.id,
+          pollUid: poll.uid,
+          participantId: participant.id,
+          participantEmail: redactEmailForLogs(participant.email),
+          durationMs: Date.now() - startedAt,
+          error,
+        });
+
+        throw error;
+      }
     }
 
     return poll;
@@ -204,19 +291,49 @@ export const pollsRouter = router({
       const organizerName = ctx.user.name || ctx.user.email;
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
-      await sendPollInviteEmail({
-        to: participant.email,
-        organizerName,
-        participantName: participant.name,
-        pollTitle: poll.title,
-        pollDescription: poll.description,
-        pollLink: buildPollInviteLink({
-          pollUid: poll.uid,
-          name: participant.name,
-          email: participant.email,
-        }),
-        t,
+      const startedAt = Date.now();
+      console.info("[polls] Sending invite email", {
+        action: "polls.resendParticipantInvite",
+        organizerId: ctx.user.id,
+        pollUid: poll.uid,
+        participantId: participant.id,
+        participantEmail: redactEmailForLogs(participant.email),
       });
+
+      try {
+        await sendPollInviteEmail({
+          to: participant.email,
+          organizerName,
+          participantName: participant.name,
+          pollTitle: poll.title,
+          pollDescription: poll.description,
+          pollLink: buildPollInviteLink({
+            pollUid: poll.uid,
+            name: participant.name,
+            email: participant.email,
+          }),
+          t,
+        });
+
+        console.info("[polls] Invite email sent", {
+          action: "polls.resendParticipantInvite",
+          pollUid: poll.uid,
+          participantId: participant.id,
+          participantEmail: redactEmailForLogs(participant.email),
+          durationMs: Date.now() - startedAt,
+        });
+      } catch (error) {
+        console.error("[polls] Invite email failed", {
+          action: "polls.resendParticipantInvite",
+          pollUid: poll.uid,
+          participantId: participant.id,
+          participantEmail: redactEmailForLogs(participant.email),
+          durationMs: Date.now() - startedAt,
+          error,
+        });
+
+        throw error;
+      }
 
       return {
         success: true,
