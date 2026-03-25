@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createPollMock = vi.fn();
 const getPollByUidForOrganizerMock = vi.fn();
 const updatePollParticipantForOrganizerMock = vi.fn();
+const addPollParticipantForOrganizerMock = vi.fn();
 const reopenPollManuallyMock = vi.fn();
 const cancelPollManuallyMock = vi.fn();
 const sendPollInviteEmailMock = vi.fn();
@@ -22,6 +23,7 @@ vi.mock("@calcom/features/polls/services/PollService", () => ({
     createPoll = createPollMock;
     getPollByUidForOrganizer = getPollByUidForOrganizerMock;
     updatePollParticipantForOrganizer = updatePollParticipantForOrganizerMock;
+    addPollParticipantForOrganizer = addPollParticipantForOrganizerMock;
     reopenPollManually = reopenPollManuallyMock;
     cancelPollManually = cancelPollManuallyMock;
   },
@@ -154,6 +156,44 @@ describe("viewer polls router", () => {
     expect(sendPollInviteEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "alex@example.com",
+      })
+    );
+  });
+
+  it("adds and invites a participant for invite-only polls", async () => {
+    addPollParticipantForOrganizerMock.mockResolvedValue({
+      id: 1,
+      uid: "poll_1",
+      title: "Planning",
+      description: null,
+      visibility: "INVITE_ONLY",
+      status: "OPEN",
+      participants: [
+        {
+          id: 21,
+          name: "Alex",
+          email: "alex@example.com",
+        },
+      ],
+    });
+
+    const caller = makeCaller();
+    await caller.addParticipant({
+      pollId: 1,
+      name: "Alex",
+      email: "ALEX@example.com",
+    });
+
+    expect(addPollParticipantForOrganizerMock).toHaveBeenCalledWith({
+      pollId: 1,
+      organizerId: 10,
+      name: "Alex",
+      email: "alex@example.com",
+    });
+    expect(sendPollInviteEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "alex@example.com",
+        participantName: "Alex",
       })
     );
   });

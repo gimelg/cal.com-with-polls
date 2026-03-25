@@ -41,6 +41,39 @@ type TrpcBatchResult<T> = {
   };
 };
 
+type TrpcErrorResult = {
+  error?: {
+    message?: string;
+    data?: {
+      code?: string;
+    };
+  };
+};
+
+const getTrpcError = (payload: unknown): { message: string; code: string | null } | null => {
+  const parseErrorResult = (candidate: unknown) => {
+    if (!candidate || typeof candidate !== "object") {
+      return null;
+    }
+
+    const error = (candidate as TrpcErrorResult).error;
+    if (!error) {
+      return null;
+    }
+
+    return {
+      message: error.message || "",
+      code: error.data?.code || null,
+    };
+  };
+
+  if (Array.isArray(payload) && payload.length > 0) {
+    return parseErrorResult(payload[0]);
+  }
+
+  return parseErrorResult(payload);
+};
+
 const getPollStatusVariant = (status: PollItem["status"]) => {
   if (status === "OPEN") return "green" as const;
   if (status === "CLOSED") return "orange" as const;
@@ -239,19 +272,19 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
         }),
       });
 
-      const payload = (await response.json()) as {
-        result?: {
-          data?: {
-            json?: unknown;
-          };
-        };
-        error?: {
-          message?: string;
-        };
-      };
+      const payload = (await response.json()) as unknown;
+      const trpcError = getTrpcError(payload);
 
-      if (!response.ok || payload.error) {
-        const message = payload.error?.message || t("something_went_wrong");
+      if (!response.ok || trpcError) {
+        const isInviteOnlyEmailMismatch =
+          requiresParticipantEmail &&
+          (trpcError?.code === "FORBIDDEN" ||
+            trpcError?.message.toLowerCase().includes("not invited") ||
+            false);
+
+        const message = isInviteOnlyEmailMismatch
+          ? t("poll_vote_invite_only_email_not_found")
+          : trpcError?.message || t("something_went_wrong");
         showToast(message, "error");
         setErrorMessage(message);
         setSubmitFeedback({ type: "error", message });

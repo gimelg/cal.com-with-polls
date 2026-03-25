@@ -444,6 +444,26 @@ export class PollRepository {
       select: pollDetailsSelect,
     });
   }
+
+  async addParticipant({ pollId, name, email }: { pollId: number; name: string; email: string }) {
+    await this.prismaClient.pollParticipant.create({
+      data: {
+        pollId,
+        name,
+        email,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return await this.prismaClient.poll.findUnique({
+      where: {
+        id: pollId,
+      },
+      select: pollDetailsSelect,
+    });
+  }
 }
 
 export type PollDetails = Prisma.PollGetPayload<{
