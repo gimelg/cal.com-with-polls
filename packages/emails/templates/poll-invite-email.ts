@@ -10,6 +10,7 @@ export type PollInviteEmailInput = {
   pollTitle: string;
   pollDescription?: string | null;
   pollLink: string;
+  hideBranding: boolean;
   t: TFunction;
 };
 
@@ -33,7 +34,9 @@ export default class PollInviteEmail extends BaseEmail {
   }
 
   protected getTextBody(): string {
-    return `${this.input.t("poll_invite_email_heading")}\n\n${this.input.t("poll_invite_email_body", {
+    const bodyKey = this.input.hideBranding ? "poll_invite_email_body_no_branding" : "poll_invite_email_body";
+
+    return `${this.input.t("poll_invite_email_heading")}\n\n${this.input.t(bodyKey, {
       participantName: this.input.participantName,
       organizerName: this.input.organizerName,
       pollTitle: this.input.pollTitle,

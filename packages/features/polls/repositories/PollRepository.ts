@@ -102,6 +102,7 @@ const pollNotificationContextSelect = {
       name: true,
       email: true,
       locale: true,
+      hideBranding: true,
     },
   },
   participants: {
