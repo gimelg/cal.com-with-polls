@@ -135,6 +135,7 @@ export class PollService {
               pollDescription: poll.description,
               selectedSlot,
               pollLink,
+              hideBranding: poll.organizer.hideBranding,
               t,
             });
           })

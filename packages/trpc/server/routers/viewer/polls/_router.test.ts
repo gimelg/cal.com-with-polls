@@ -53,6 +53,8 @@ describe("viewer polls router", () => {
         name: "Organizer",
         email: "organizer@example.com",
         locale: "en",
+        hideBranding: false,
+        organization: null,
       },
       session: {
         user: {
@@ -120,6 +122,7 @@ describe("viewer polls router", () => {
         to: "alex@example.com",
         participantName: "Alex",
         pollTitle: "Planning",
+        hideBranding: false,
       })
     );
 

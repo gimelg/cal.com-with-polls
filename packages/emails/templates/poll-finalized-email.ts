@@ -11,6 +11,7 @@ export type PollFinalizedEmailInput = {
   pollDescription?: string | null;
   selectedSlot: string;
   pollLink: string;
+  hideBranding: boolean;
   t: TFunction;
 };
 
@@ -36,8 +37,12 @@ export default class PollFinalizedEmail extends BaseEmail {
   protected getTextBody(): string {
     const bodyKey =
       this.input.recipientRole === "ORGANIZER"
-        ? "poll_finalized_email_body_organizer"
-        : "poll_finalized_email_body_participant";
+        ? this.input.hideBranding
+          ? "poll_finalized_email_body_organizer_no_branding"
+          : "poll_finalized_email_body_organizer"
+        : this.input.hideBranding
+          ? "poll_finalized_email_body_participant_no_branding"
+          : "poll_finalized_email_body_participant";
 
     return `${this.input.t("poll_finalized_email_heading")}\n\n${this.input.t(bodyKey, {
       recipientName: this.input.recipientName,

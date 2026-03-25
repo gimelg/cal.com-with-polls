@@ -1,4 +1,4 @@
-import { APP_NAME, SUPPORT_MAIL_ADDRESS } from "@calcom/lib/constants";
+import { APP_NAME } from "@calcom/lib/constants";
 import type { TFunction } from "i18next";
 import { BaseEmailHtml, CallToAction } from "../components";
 
@@ -9,11 +9,14 @@ export type PollInviteEmailProps = {
   pollTitle: string;
   pollDescription?: string | null;
   pollLink: string;
+  hideBranding: boolean;
 };
 
 export const PollInviteEmail = (
   props: PollInviteEmailProps & Partial<React.ComponentProps<typeof BaseEmailHtml>>
 ) => {
+  const bodyKey = props.hideBranding ? "poll_invite_email_body_no_branding" : "poll_invite_email_body";
+
   return (
     <BaseEmailHtml subject={props.t("poll_invite_email_subject", { pollTitle: props.pollTitle })}>
       <p
@@ -27,7 +30,7 @@ export const PollInviteEmail = (
       </p>
 
       <p style={{ fontWeight: 400, lineHeight: "24px" }}>
-        {props.t("poll_invite_email_body", {
+        {props.t(bodyKey, {
           participantName: props.participantName,
           organizerName: props.organizerName,
           pollTitle: props.pollTitle,
@@ -50,10 +53,6 @@ export const PollInviteEmail = (
         <a href={props.pollLink} style={{ color: "#3E3E3E" }} target="_blank" rel="noreferrer">
           {props.pollLink}
         </a>
-      </p>
-
-      <p style={{ fontWeight: 400, lineHeight: "24px", marginTop: "28px" }}>
-        {props.t("poll_invite_email_footer", { supportEmail: SUPPORT_MAIL_ADDRESS })}
       </p>
     </BaseEmailHtml>
   );

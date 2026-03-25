@@ -1,4 +1,4 @@
-import { APP_NAME, SUPPORT_MAIL_ADDRESS } from "@calcom/lib/constants";
+import { APP_NAME } from "@calcom/lib/constants";
 import type { TFunction } from "i18next";
 import { BaseEmailHtml, CallToAction } from "../components";
 
@@ -10,6 +10,7 @@ export type PollFinalizedEmailProps = {
   pollDescription?: string | null;
   selectedSlot: string;
   pollLink: string;
+  hideBranding: boolean;
 };
 
 export const PollFinalizedEmail = (
@@ -17,8 +18,12 @@ export const PollFinalizedEmail = (
 ) => {
   const bodyKey =
     props.recipientRole === "ORGANIZER"
-      ? "poll_finalized_email_body_organizer"
-      : "poll_finalized_email_body_participant";
+      ? props.hideBranding
+        ? "poll_finalized_email_body_organizer_no_branding"
+        : "poll_finalized_email_body_organizer"
+      : props.hideBranding
+        ? "poll_finalized_email_body_participant_no_branding"
+        : "poll_finalized_email_body_participant";
 
   return (
     <BaseEmailHtml subject={props.t("poll_finalized_email_subject", { pollTitle: props.pollTitle })}>
@@ -59,10 +64,6 @@ export const PollFinalizedEmail = (
         <a href={props.pollLink} style={{ color: "#3E3E3E" }} target="_blank" rel="noreferrer">
           {props.pollLink}
         </a>
-      </p>
-
-      <p style={{ fontWeight: 400, lineHeight: "24px", marginTop: "28px" }}>
-        {props.t("poll_invite_email_footer", { supportEmail: SUPPORT_MAIL_ADDRESS })}
       </p>
     </BaseEmailHtml>
   );

@@ -51,6 +51,7 @@ describe("sendPollInviteEmail", () => {
       pollTitle: "Planning Poll",
       pollDescription: "Pick a slot",
       pollLink: "https://app.cal.com/poll/poll_1",
+      hideBranding: false,
       t: ((key: string) => key) as never,
     };
 
@@ -73,6 +74,7 @@ describe("sendPollInviteEmail", () => {
         pollTitle: "Planning Poll",
         pollDescription: null,
         pollLink: "https://app.cal.com/poll/poll_1",
+        hideBranding: false,
         t: ((key: string) => key) as never,
       })
     ).rejects.toThrow("constructor failed");
@@ -91,6 +93,7 @@ describe("sendPollFinalizedEmail", () => {
       pollDescription: "Pick a slot",
       selectedSlot: "Apr 2, 2026 10:00 AM - Apr 2, 2026 10:30 AM (UTC)",
       pollLink: "https://app.cal.com/poll/poll_1",
+      hideBranding: false,
       t: ((key: string) => key) as never,
     };
 

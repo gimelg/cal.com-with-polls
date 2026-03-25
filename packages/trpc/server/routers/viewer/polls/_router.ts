@@ -95,6 +95,10 @@ const redactEmailForLogs = (email: string) => {
   return `${localPart.slice(0, 2)}***${localPart.slice(-1)}@${domainPart}`;
 };
 
+const shouldHideBrandingForOrganizer = (user: { hideBranding?: boolean; organization?: { hideBranding?: boolean } | null }) => {
+  return Boolean(user.hideBranding || user.organization?.hideBranding);
+};
+
 export const pollsRouter = router({
   create: authedProcedure.input(createPollSchema).mutation(async ({ ctx, input }) => {
     const pollService = new PollService();
@@ -107,6 +111,7 @@ export const pollsRouter = router({
 
     if (poll.visibility === "INVITE_ONLY" && poll.participants.length > 0) {
       const organizerName = ctx.user.name || ctx.user.email;
+      const hideBranding = shouldHideBrandingForOrganizer(ctx.user);
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
       console.info("[polls] Sending invite emails", {
@@ -132,6 +137,7 @@ export const pollsRouter = router({
                 name: participant.name,
                 email: participant.email,
               }),
+              hideBranding,
               t,
             });
 
@@ -205,6 +211,7 @@ export const pollsRouter = router({
 
     if (participant) {
       const organizerName = ctx.user.name || ctx.user.email;
+      const hideBranding = shouldHideBrandingForOrganizer(ctx.user);
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
       const startedAt = Date.now();
@@ -229,6 +236,7 @@ export const pollsRouter = router({
             name: participant.name,
             email: participant.email,
           }),
+          hideBranding,
           t,
         });
 
@@ -289,6 +297,7 @@ export const pollsRouter = router({
       }
 
       const organizerName = ctx.user.name || ctx.user.email;
+      const hideBranding = shouldHideBrandingForOrganizer(ctx.user);
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
       const startedAt = Date.now();
@@ -312,6 +321,7 @@ export const pollsRouter = router({
             name: participant.name,
             email: participant.email,
           }),
+          hideBranding,
           t,
         });
 
