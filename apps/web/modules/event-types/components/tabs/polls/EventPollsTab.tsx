@@ -35,6 +35,11 @@ type ParticipantEditDraft = {
   email: string;
 };
 
+type AddParticipantDraft = {
+  name: string;
+  email: string;
+};
+
 type ResendInviteTarget = {
   pollUid: string;
   participantId: number;
@@ -159,6 +164,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     useState<ParticipantIdentityMode>("NAME_AND_EMAIL");
   const [expiresAt, setExpiresAt] = useState("");
   const [participantEdits, setParticipantEdits] = useState<Record<string, ParticipantEditDraft>>({});
+  const [addParticipantDrafts, setAddParticipantDrafts] = useState<Record<number, AddParticipantDraft>>({});
   const [expandedOptionResponses, setExpandedOptionResponses] = useState<Record<string, boolean>>({});
   const [resendInviteTarget, setResendInviteTarget] = useState<ResendInviteTarget | null>(null);
   const [cancelPollTarget, setCancelPollTarget] = useState<CancelPollTarget | null>(null);
@@ -254,6 +260,26 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
       });
 
       showToast(t("poll_participant_updated_successfully"), "success");
+      await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
+    },
+    onError: (error) => {
+      showToast(error.message, "error");
+    },
+  });
+
+  const addParticipantMutation = trpc.viewer.polls.addParticipant.useMutation({
+    onSuccess: async (_, variables) => {
+      setAddParticipantDrafts((previous) => {
+        if (!previous[variables.pollId]) {
+          return previous;
+        }
+
+        const next = { ...previous };
+        delete next[variables.pollId];
+        return next;
+      });
+
+      showToast(t("poll_participant_added_and_invited"), "success");
       await utils.viewer.polls.listByEventType.invalidate({ eventTypeId: eventType.id });
     },
     onError: (error) => {
@@ -489,6 +515,54 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     updateParticipantMutation.mutate({
       pollId,
       participantId,
+      name: trimmedName,
+      email: trimmedEmail,
+    });
+  };
+
+  const getAddParticipantDraft = (pollId: number): AddParticipantDraft => {
+    return addParticipantDrafts[pollId] || { name: "", email: "" };
+  };
+
+  const setAddParticipantField = ({
+    pollId,
+    field,
+    value,
+  }: {
+    pollId: number;
+    field: keyof AddParticipantDraft;
+    value: string;
+  }) => {
+    setAddParticipantDrafts((previous) => {
+      const current = previous[pollId] || { name: "", email: "" };
+
+      return {
+        ...previous,
+        [pollId]: {
+          ...current,
+          [field]: value,
+        },
+      };
+    });
+  };
+
+  const addParticipantToPoll = ({ pollId }: { pollId: number }) => {
+    const draft = getAddParticipantDraft(pollId);
+    const trimmedName = draft.name.trim();
+    const trimmedEmail = draft.email.trim().toLowerCase();
+
+    if (!trimmedName || !trimmedEmail) {
+      showToast(t("poll_participant_name_and_email_required"), "error");
+      return;
+    }
+
+    if (!EMAIL_PATTERN.test(trimmedEmail)) {
+      showToast(t("poll_invalid_participant_email"), "error");
+      return;
+    }
+
+    addParticipantMutation.mutate({
+      pollId,
       name: trimmedName,
       email: trimmedEmail,
     });
@@ -1041,6 +1115,51 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                       <h5 className="text-default text-sm font-semibold">{t("poll_invited_participants")}</h5>
                     </div>
                     <p className="text-muted mb-3 text-xs">{t("poll_invited_participants_edit_hint")}</p>
+
+                    {poll.status === "OPEN" ? (
+                      <div className="mb-4 rounded-md border border-subtle bg-subtle p-3">
+                        <p className="text-default mb-2 text-xs font-medium">
+                          {t("poll_add_participant_after_creation")}
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                          <TextField
+                            label={t("name")}
+                            placeholder={t("poll_participant_name_placeholder")}
+                            value={getAddParticipantDraft(poll.id).name}
+                            onChange={(event) =>
+                              setAddParticipantField({
+                                pollId: poll.id,
+                                field: "name",
+                                value: event.target.value,
+                              })
+                            }
+                          />
+                          <TextField
+                            type="email"
+                            label={t("email")}
+                            placeholder={t("poll_participant_email_placeholder")}
+                            value={getAddParticipantDraft(poll.id).email}
+                            onChange={(event) =>
+                              setAddParticipantField({
+                                pollId: poll.id,
+                                field: "email",
+                                value: event.target.value,
+                              })
+                            }
+                          />
+                          <div className="flex items-end">
+                            <Button
+                              type="button"
+                              StartIcon="plus"
+                              loading={addParticipantMutation.isPending}
+                              disabled={addParticipantMutation.isPending}
+                              onClick={() => addParticipantToPoll({ pollId: poll.id })}>
+                              {t("poll_add_participant")}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {poll.participants.length > 0 ? (
                       <div className="stack-y-3">

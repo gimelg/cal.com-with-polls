@@ -64,6 +64,12 @@ const updateParticipantSchema = z.object({
   email: z.string().email(),
 });
 
+const addParticipantSchema = z.object({
+  pollId: z.number().int().positive(),
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
 const resendParticipantInviteSchema = z.object({
   pollUid: z.string().min(1),
   participantId: z.number().int().positive(),
@@ -126,6 +132,43 @@ export const pollsRouter = router({
       name: input.name,
       email: input.email,
     });
+  }),
+  addParticipant: authedProcedure.input(addParticipantSchema).mutation(async ({ ctx, input }) => {
+    const pollService = new PollService();
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const normalizedName = input.name.trim();
+
+    const poll = await pollService.addPollParticipantForOrganizer({
+      pollId: input.pollId,
+      organizerId: ctx.user.id,
+      name: normalizedName,
+      email: normalizedEmail,
+    });
+
+    const participant = poll.participants.find(
+      (candidate) => candidate.email.toLowerCase() === normalizedEmail
+    );
+
+    if (participant) {
+      const organizerName = ctx.user.name || ctx.user.email;
+      const t = await getTranslation(ctx.user.locale || "en", "common");
+
+      await sendPollInviteEmail({
+        to: participant.email,
+        organizerName,
+        participantName: participant.name,
+        pollTitle: poll.title,
+        pollDescription: poll.description,
+        pollLink: buildPollInviteLink({
+          pollUid: poll.uid,
+          name: participant.name,
+          email: participant.email,
+        }),
+        t,
+      });
+    }
+
+    return poll;
   }),
   resendParticipantInvite: authedProcedure
     .input(resendParticipantInviteSchema)

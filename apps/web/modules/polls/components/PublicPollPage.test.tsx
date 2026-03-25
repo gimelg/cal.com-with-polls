@@ -167,12 +167,10 @@ describe("PublicPollPage", () => {
   });
 
   it("blocks voting when poll is cancelled", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => buildGetByUidResponse(buildPoll({ status: "CANCELLED" })),
-      });
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => buildGetByUidResponse(buildPoll({ status: "CANCELLED" })),
+    });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -181,5 +179,37 @@ describe("PublicPollPage", () => {
     expect(await screen.findByText("Sprint planning")).toBeInTheDocument();
     expect(screen.getByText("poll_vote_cancelled")).toBeInTheDocument();
     expect(screen.queryByText("poll_vote_submit")).not.toBeInTheDocument();
+  });
+
+  it("shows invite-only specific message when email is not invited", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => buildGetByUidResponse(buildPoll({ visibility: "INVITE_ONLY" })),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: {
+            message: "Participant is not invited to this poll",
+            data: {
+              code: "FORBIDDEN",
+            },
+          },
+        }),
+      });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PublicPollPage uid="poll_123" prefilledName="Alex" prefilledEmail="wrong@example.com" />);
+
+    expect(await screen.findByText("Sprint planning")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("poll_vote_submit"));
+
+    await waitFor(() => {
+      expect(screen.getByText("poll_vote_invite_only_email_not_found")).toBeInTheDocument();
+    });
   });
 });

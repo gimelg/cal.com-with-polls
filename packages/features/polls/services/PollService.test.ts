@@ -100,6 +100,7 @@ const buildService = ({
   getPollByIdAndOrganizerId,
   finalizePoll,
   updateParticipant,
+  addParticipant,
   reopenPoll,
   cancelPoll,
 }: {
@@ -108,6 +109,7 @@ const buildService = ({
   getPollByIdAndOrganizerId?: ReturnType<typeof vi.fn>;
   finalizePoll?: ReturnType<typeof vi.fn>;
   updateParticipant?: ReturnType<typeof vi.fn>;
+  addParticipant?: ReturnType<typeof vi.fn>;
   reopenPoll?: ReturnType<typeof vi.fn>;
   cancelPoll?: ReturnType<typeof vi.fn>;
 }) => {
@@ -117,6 +119,7 @@ const buildService = ({
     getPollByIdAndOrganizerId: getPollByIdAndOrganizerId ?? vi.fn(),
     finalizePoll: finalizePoll ?? vi.fn(),
     updateParticipant: updateParticipant ?? vi.fn(),
+    addParticipant: addParticipant ?? vi.fn(),
     reopenPoll: reopenPoll ?? vi.fn(),
     cancelPoll: cancelPoll ?? vi.fn(),
   };
@@ -254,6 +257,69 @@ describe("PollService", () => {
           email: "alex@example.com",
         });
         throw new Error("Expected updatePollParticipantForOrganizer to throw");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ErrorWithCode);
+        const errorWithCode = error as ErrorWithCode;
+        expect(errorWithCode.code).toBe(ErrorCode.BadRequest);
+        expect(errorWithCode.message).toBe("A participant with this email already exists in this poll");
+      }
+    });
+  });
+
+  describe("addPollParticipantForOrganizer", () => {
+    it("adds invite-only participant with normalized values", async () => {
+      const poll = buildPoll({ visibility: "INVITE_ONLY" });
+      const updatedPoll = buildPoll({
+        visibility: "INVITE_ONLY",
+        participants: [
+          ...poll.participants,
+          {
+            id: 24,
+            name: "Dana",
+            email: "dana@example.com",
+          },
+        ],
+      });
+
+      const { service, pollRepository } = buildService({
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(poll),
+        addParticipant: vi.fn().mockResolvedValue(updatedPoll),
+      });
+
+      const result = await service.addPollParticipantForOrganizer({
+        pollId: poll.id,
+        organizerId: poll.organizerId,
+        name: "  Dana  ",
+        email: "  DANA@EXAMPLE.COM  ",
+      });
+
+      expect(result).toEqual(updatedPoll);
+      expect(pollRepository.addParticipant).toHaveBeenCalledWith({
+        pollId: poll.id,
+        name: "Dana",
+        email: "dana@example.com",
+      });
+    });
+
+    it("maps duplicate participant email conflict to bad request error", async () => {
+      const poll = buildPoll({ visibility: "INVITE_ONLY" });
+      const duplicateError = {
+        code: "P2002",
+      } as Prisma.PrismaClientKnownRequestError;
+
+      const { service } = buildService({
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(poll),
+        addParticipant: vi.fn().mockRejectedValue(duplicateError),
+      });
+
+      try {
+        await service.addPollParticipantForOrganizer({
+          pollId: poll.id,
+          organizerId: poll.organizerId,
+          name: "Dana",
+          email: "dana@example.com",
+        });
+        throw new Error("Expected addPollParticipantForOrganizer to throw");
       } catch (error) {
         expect(error).toBeInstanceOf(ErrorWithCode);
         const errorWithCode = error as ErrorWithCode;
@@ -412,10 +478,7 @@ describe("PollService", () => {
       const onPollFinalized = vi.fn().mockResolvedValue(undefined);
 
       const pollRepository = {
-        getPollByUid: vi
-          .fn()
-          .mockResolvedValueOnce(startingPoll)
-          .mockResolvedValueOnce(refreshedPoll),
+        getPollByUid: vi.fn().mockResolvedValueOnce(startingPoll).mockResolvedValueOnce(refreshedPoll),
         deleteVotesForParticipant: vi.fn().mockResolvedValue(undefined),
         upsertVote: vi.fn().mockResolvedValue({ id: 1 }),
         getPollById: vi.fn().mockResolvedValue(refreshedPoll),

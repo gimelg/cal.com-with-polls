@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EventPollsTab } from "./EventPollsTab";
 
 const listByEventTypeUseQueryMock = vi.fn();
+const addParticipantMutateMock = vi.fn();
 
 vi.mock("@calcom/lib/hooks/useLocale", () => ({
   useLocale: () => ({
@@ -60,6 +61,9 @@ vi.mock("@calcom/trpc/react", () => ({
         updateParticipant: {
           useMutation: () => ({ mutate: vi.fn(), isPending: false }),
         },
+        addParticipant: {
+          useMutation: () => ({ mutate: addParticipantMutateMock, isPending: false }),
+        },
         resendParticipantInvite: {
           useMutation: () => ({ mutate: vi.fn(), isPending: false }),
         },
@@ -89,10 +93,16 @@ vi.mock("@calcom/ui/components/button", () => ({
 }));
 
 vi.mock("@calcom/ui/components/form", () => ({
-  TextField: ({ label, value, onChange, type = "text" }: ComponentProps<"input"> & { label: string }) => (
+  TextField: ({
+    label,
+    value,
+    onChange,
+    type = "text",
+    placeholder,
+  }: ComponentProps<"input"> & { label: string }) => (
     <label>
       {label}
-      <input type={type} value={value as string} onChange={onChange} />
+      <input type={type} value={value as string} onChange={onChange} placeholder={placeholder as string} />
     </label>
   ),
   TextAreaField: ({ label, value, onChange }: ComponentProps<"textarea"> & { label: string }) => (
@@ -138,6 +148,7 @@ const eventTypeFixture = {
 describe("EventPollsTab", () => {
   beforeEach(() => {
     listByEventTypeUseQueryMock.mockReset();
+    addParticipantMutateMock.mockReset();
   });
 
   it("shows per-option responses only after toggling", () => {
@@ -239,5 +250,63 @@ describe("EventPollsTab", () => {
     expect(screen.getByText("reopen_poll")).toBeInTheDocument();
     expect(screen.getByText("cancel_poll")).toBeInTheDocument();
     expect(screen.queryByText("close_poll")).not.toBeInTheDocument();
+  });
+
+  it("allows adding an invited participant on open invite-only polls", () => {
+    listByEventTypeUseQueryMock.mockReturnValue({
+      isPending: false,
+      data: [
+        {
+          id: 3,
+          uid: "poll_3",
+          title: "Invite-only poll",
+          description: null,
+          status: "OPEN",
+          visibility: "INVITE_ONLY",
+          isAnonymous: false,
+          finalizationMode: "MANUAL",
+          organizerId: 10,
+          expiresAt: null,
+          finalizedAt: null,
+          finalizedById: null,
+          finalizedOptionId: null,
+          finalizedBookingId: null,
+          options: [
+            {
+              id: 41,
+              startTime: new Date("2026-04-07T10:00:00.000Z"),
+              endTime: new Date("2026-04-07T10:30:00.000Z"),
+              position: 0,
+            },
+          ],
+          participants: [
+            {
+              id: 51,
+              name: "Alex",
+              email: "alex@example.com",
+            },
+          ],
+          votes: [],
+        },
+      ],
+    });
+
+    render(<EventPollsTab eventType={eventTypeFixture} />);
+
+    expect(screen.getByText("poll_add_participant_after_creation")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("poll_participant_name_placeholder"), {
+      target: { value: "Dana" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("poll_participant_email_placeholder"), {
+      target: { value: "DANA@EXAMPLE.COM" },
+    });
+    fireEvent.click(screen.getByText("poll_add_participant"));
+
+    expect(addParticipantMutateMock).toHaveBeenCalledWith({
+      pollId: 3,
+      name: "Dana",
+      email: "dana@example.com",
+    });
   });
 });

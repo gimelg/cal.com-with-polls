@@ -508,6 +508,65 @@ export class PollService {
     }
   }
 
+  async addPollParticipantForOrganizer({
+    pollId,
+    organizerId,
+    name,
+    email,
+  }: {
+    pollId: number;
+    organizerId: number;
+    name: string;
+    email: string;
+  }) {
+    const poll = await this.pollRepository.getPollByIdAndOrganizerId(pollId, organizerId);
+    if (!poll) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found");
+    }
+
+    if (poll.visibility !== "INVITE_ONLY") {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Only invite-only polls support participant updates");
+    }
+
+    if (poll.status !== "OPEN") {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Only open polls support participant updates");
+    }
+
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Participant name is required");
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Participant email is required");
+    }
+
+    try {
+      const updatedPoll = await this.pollRepository.addParticipant({
+        pollId,
+        name: normalizedName,
+        email: normalizedEmail,
+      });
+
+      if (!updatedPoll) {
+        throw new ErrorWithCode(ErrorCode.NotFound, "Poll not found after participant creation");
+      }
+
+      return updatedPoll;
+    } catch (error) {
+      const prismaError = error as Prisma.PrismaClientKnownRequestError;
+      if (prismaError.code === "P2002") {
+        throw new ErrorWithCode(
+          ErrorCode.BadRequest,
+          "A participant with this email already exists in this poll"
+        );
+      }
+
+      throw error;
+    }
+  }
+
   private async finalizePollInternal({
     pollId,
     finalizedById,
