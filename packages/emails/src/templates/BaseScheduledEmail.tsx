@@ -27,17 +27,17 @@ export const BaseScheduledEmail = (
     isOrganizer?: boolean;
     reassigned?: { name: string | null; email: string; reason?: string; byUser?: string };
   } & Partial<React.ComponentProps<typeof BaseEmailHtml>>
-) => {
+): JSX.Element => {
   const { t, timeZone, locale, timeFormat: timeFormat_ } = props;
   const isPollBooking = typeof props.calEvent.pollUid === "string";
 
   const timeFormat = timeFormat_ ?? TimeFormat.TWELVE_HOUR;
 
-  function getRecipientStart(format: string) {
+  function getRecipientStart(format: string): string {
     return dayjs(props.calEvent.startTime).tz(timeZone).format(format);
   }
 
-  function getRecipientEnd(format: string) {
+  function getRecipientEnd(format: string): string {
     return dayjs(props.calEvent.endTime).tz(timeZone).format(format);
   }
 
@@ -62,36 +62,54 @@ export const BaseScheduledEmail = (
     rescheduledBy = personWhoRescheduled?.name;
   }
 
+  let scheduledTitle = props.title;
+  if (!scheduledTitle) {
+    if (props.calEvent.recurringEvent?.count) {
+      scheduledTitle = "your_event_has_been_scheduled_recurring";
+    } else {
+      scheduledTitle = "your_event_has_been_scheduled";
+    }
+  }
+
+  let callToAction = props.callToAction;
+  if (callToAction !== null && !callToAction) {
+    callToAction = <ManageLink attendee={props.attendee} calEvent={props.calEvent} />;
+  }
+
+  let cancellationLabelKey = "cancellation_reason";
+  if (props.calEvent.cancellationReason?.startsWith("$RCH$")) {
+    cancellationLabelKey = "reason_for_reschedule";
+  }
+
+  let assignmentReasonDescription = "";
+  if (props.calEvent.assignmentReason) {
+    assignmentReasonDescription = t(props.calEvent.assignmentReason.category);
+    if (props.calEvent.assignmentReason.details) {
+      assignmentReasonDescription = `${assignmentReasonDescription}: ${props.calEvent.assignmentReason.details}`;
+    }
+  }
+
+  let paymentLabel = t("price");
+  if (props.calEvent.paymentInfo?.paymentOption === "HOLD") {
+    paymentLabel = t("no_show_fee");
+  }
+
+  const showWhoInfo = !isPollBooking;
+
   return (
     <BaseEmailHtml
       hideLogo={Boolean(props.calEvent.platformClientId) || Boolean(props.calEvent.hideBranding)}
       headerType={props.headerType || "checkCircle"}
       subject={props.subject || subject}
-      title={t(
-        props.title
-          ? props.title
-          : props.calEvent.recurringEvent?.count
-            ? "your_event_has_been_scheduled_recurring"
-            : "your_event_has_been_scheduled"
-      )}
-      callToAction={
-        props.callToAction === null
-          ? null
-          : props.callToAction || <ManageLink attendee={props.attendee} calEvent={props.calEvent} />
-      }
+      title={t(scheduledTitle)}
+      callToAction={callToAction}
       subtitle={props.subtitle || <>{t("emailed_you_and_any_other_attendees")}</>}>
       {props.calEvent.rejectionReason && (
-        <>
-          <Info label={t("rejection_reason")} description={props.calEvent.rejectionReason} withSpacer />
-        </>
+        <Info label={t("rejection_reason")} description={props.calEvent.rejectionReason} withSpacer />
       )}
       {props.calEvent.cancellationReason && (
         <Info
-          label={t(
-            props.calEvent.cancellationReason.startsWith("$RCH$")
-              ? "reason_for_reschedule"
-              : "cancellation_reason"
-          )}
+          label={t(cancellationLabelKey)}
           description={
             !!props.calEvent.cancellationReason && props.calEvent.cancellationReason.replace("$RCH$", "")
           } // Removing flag to distinguish reschedule from cancellation
@@ -112,7 +130,7 @@ export const BaseScheduledEmail = (
           )}
         </>
       )}
-      {props.reassigned && props.reassigned.byUser && (
+      {props.reassigned?.byUser && (
         <>
           <Info label={t("reassigned_by")} description={props.reassigned.byUser} withSpacer />
           {props.reassigned?.reason && (
@@ -123,22 +141,18 @@ export const BaseScheduledEmail = (
       {rescheduledBy && <Info label={t("rescheduled_by")} description={rescheduledBy} withSpacer />}
       <Info label={t("what")} description={props.calEvent.title} withSpacer />
       <WhenInfo timeFormat={timeFormat} calEvent={props.calEvent} t={t} timeZone={timeZone} locale={locale} />
-      {!isPollBooking ? <WhoInfo calEvent={props.calEvent} t={t} /> : null}
+      {showWhoInfo && <WhoInfo calEvent={props.calEvent} t={t} />}
       <LocationInfo calEvent={props.calEvent} t={t} />
       <Info label={t("description")} description={props.calEvent.description} withSpacer formatted />
       <Info label={t("additional_notes")} description={props.calEvent.additionalNotes} withSpacer />
       {props.includeAppsStatus && <AppsStatus calEvent={props.calEvent} t={t} />}
       {props.isOrganizer && props.calEvent.assignmentReason && (
-        <Info
-          label={t("assignment_reason")}
-          description={`${t(props.calEvent.assignmentReason.category)}${props.calEvent.assignmentReason.details ? `: ${props.calEvent.assignmentReason.details}` : ""}`}
-          withSpacer
-        />
+        <Info label={t("assignment_reason")} description={assignmentReasonDescription} withSpacer />
       )}
       <UserFieldsResponses t={t} calEvent={props.calEvent} isOrganizer={props.isOrganizer} />
       {props.calEvent.paymentInfo?.amount && (
         <Info
-          label={props.calEvent.paymentInfo.paymentOption === "HOLD" ? t("no_show_fee") : t("price")}
+          label={paymentLabel}
           description={formatPrice(
             props.calEvent.paymentInfo.amount,
             props.calEvent.paymentInfo.currency,
