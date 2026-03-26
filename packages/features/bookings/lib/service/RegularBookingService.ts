@@ -1548,6 +1548,7 @@ async function handler(
     .withMetadataAndResponses({
       additionalNotes,
       customInputs,
+      metadata: reqBody.metadata,
       responses: reqBody.calEventResponses || null,
       userFieldsResponses: reqBody.calEventUserFieldsResponses || null,
     })

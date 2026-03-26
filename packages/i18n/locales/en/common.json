@@ -2029,6 +2029,7 @@
   "poll_finalized_email_body_participant_no_branding": "Hi {{recipientName}}, the poll \"{{pollTitle}}\" has been finalized.",
   "poll_finalized_email_selected_slot": "Selected slot: {{slot}}",
   "poll_finalized_email_cta": "View finalized poll",
+  "poll_booking_finalized_subject": "{{pollTitle}} poll finalized",
   "poll_status_open": "Open",
   "poll_status_closed": "Closed",
   "poll_status_finalized": "Finalized",

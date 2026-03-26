@@ -29,6 +29,7 @@ export const BaseScheduledEmail = (
   } & Partial<React.ComponentProps<typeof BaseEmailHtml>>
 ) => {
   const { t, timeZone, locale, timeFormat: timeFormat_ } = props;
+  const isPollBooking = typeof props.calEvent.pollUid === "string";
 
   const timeFormat = timeFormat_ ?? TimeFormat.TWELVE_HOUR;
 
@@ -122,7 +123,7 @@ export const BaseScheduledEmail = (
       {rescheduledBy && <Info label={t("rescheduled_by")} description={rescheduledBy} withSpacer />}
       <Info label={t("what")} description={props.calEvent.title} withSpacer />
       <WhenInfo timeFormat={timeFormat} calEvent={props.calEvent} t={t} timeZone={timeZone} locale={locale} />
-      <WhoInfo calEvent={props.calEvent} t={t} />
+      {!isPollBooking ? <WhoInfo calEvent={props.calEvent} t={t} /> : null}
       <LocationInfo calEvent={props.calEvent} t={t} />
       <Info label={t("description")} description={props.calEvent.description} withSpacer formatted />
       <Info label={t("additional_notes")} description={props.calEvent.additionalNotes} withSpacer formatted />

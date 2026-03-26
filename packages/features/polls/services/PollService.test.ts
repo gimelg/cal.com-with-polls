@@ -505,5 +505,32 @@ describe("PollService", () => {
         pollOptionId: 11,
       });
     });
+
+    it("does not send poll finalized email when booking emails are already sent", async () => {
+      const openPoll = buildPoll({ status: "OPEN" });
+      const finalizedPoll = buildPoll({ status: "FINALIZED", finalizedOptionId: 11, finalizedBookingId: 1234 });
+      const onPollFinalized = vi.fn().mockResolvedValue(undefined);
+
+      const pollRepository = {
+        getPollByIdAndOrganizerId: vi.fn().mockResolvedValue(openPoll),
+        getPollById: vi.fn().mockResolvedValue(openPoll),
+        finalizePoll: vi.fn().mockResolvedValue(finalizedPoll),
+      };
+
+      const serviceWithNotifications = new PollService({
+        pollRepository: pollRepository as never,
+        onFinalize: vi.fn().mockResolvedValue({ bookingId: 1234 }),
+        onPollFinalized,
+      });
+
+      const result = await serviceWithNotifications.finalizePollManually({
+        pollId: openPoll.id,
+        organizerId: openPoll.organizerId,
+        optionId: 11,
+      });
+
+      expect(result).toEqual(finalizedPoll);
+      expect(onPollFinalized).not.toHaveBeenCalled();
+    });
   });
 });

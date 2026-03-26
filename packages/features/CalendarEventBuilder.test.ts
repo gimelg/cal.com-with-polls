@@ -196,6 +196,26 @@ describe("CalendarEventBuilder", () => {
     }
   });
 
+  it("should use poll title from metadata when present", () => {
+    const event = createBuilder({
+      title: "Default generated title",
+    })
+      .withEventType({
+        id: 123,
+      })
+      .withMetadataAndResponses({
+        metadata: {
+          pollUid: "poll_123",
+          pollTitle: "Quarterly Planning Poll",
+        },
+      })
+      .build();
+
+    expect(event.title).toBe("Quarterly Planning Poll");
+    expect(event.pollUid).toBe("poll_123");
+    expect(event.pollTitle).toBe("Quarterly Planning Poll");
+  });
+
   it("should create an event with location", () => {
     const event = createBuilder()
       .withEventType({

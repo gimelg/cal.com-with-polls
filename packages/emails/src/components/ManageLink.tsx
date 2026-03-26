@@ -36,7 +36,8 @@ export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person })
   const hasRescheduleLink = Boolean(rescheduleLink) && !props.calEvent.disableRescheduling;
   const hasBookingLink = Boolean(bookingLink);
   const isRecurringEvent = props.calEvent.recurringEvent;
-  const shouldDisplayRescheduleLink = Boolean(hasRescheduleLink && !isRecurringEvent);
+  const isPollBooking = typeof props.calEvent.pollUid === "string";
+  const shouldDisplayRescheduleLink = Boolean(hasRescheduleLink && !isRecurringEvent && !isPollBooking);
   const isTeamMember = props.calEvent.team?.members.some((member) => props.attendee.email === member.email);
 
   if (
