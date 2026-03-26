@@ -33,6 +33,19 @@ type CalendarEventRequiredFields = Required<
 type CalendarEventBuilderInit = CalendarEventRequiredFields & Partial<CalendarEvent>;
 const APP_TYPE_TO_NAME_MAP = new Map<string, string>(ALL_APPS.map((app) => [app.type, app.name]));
 
+function extractStringMetadata(metadata: unknown): Record<string, string> | undefined {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value : String(value),
+    ])
+  );
+}
+
 async function _buildPersonFromUser(
   user: Pick<User, "id" | "name" | "locale" | "username" | "email" | "timeFormat" | "timeZone">
 ) {
@@ -113,6 +126,7 @@ export class CalendarEventBuilder {
       location,
       responses,
       customInputs,
+      metadata,
       iCalUID,
       iCalSequence,
       oneTimePassword,
@@ -148,6 +162,7 @@ export class CalendarEventBuilder {
 
     const parsedBookingResponses = bookingResponsesSchema.safeParse(responses);
     const bookingResponses = parsedBookingResponses.success ? parsedBookingResponses.data : null;
+    const bookingMetadata = extractStringMetadata(metadata);
 
     const calEventResponses = getCalEventResponses({
       booking,
@@ -190,6 +205,7 @@ export class CalendarEventBuilder {
       .withMetadataAndResponses({
         additionalNotes,
         customInputs: parsedCustomInputs,
+        metadata: bookingMetadata,
         responses: calEventResponses.responses,
         userFieldsResponses: calEventResponses.userFieldsResponses,
       })
@@ -340,20 +356,27 @@ export class CalendarEventBuilder {
   withMetadataAndResponses({
     additionalNotes,
     customInputs,
+    metadata,
     responses,
     userFieldsResponses,
   }: {
     additionalNotes?: string | null;
     customInputs?: Prisma.JsonObject | null;
+    metadata?: Record<string, string>;
     responses?: CalEventResponses | null;
     userFieldsResponses?: CalEventResponses | null;
   }) {
+    const pollUid = metadata?.pollUid?.trim();
+    const pollTitle = metadata?.pollTitle?.trim();
+
     this.event = {
       ...this.event,
       additionalNotes,
       customInputs,
       responses,
       userFieldsResponses,
+      ...(pollUid ? { pollUid } : {}),
+      ...(pollTitle ? { pollTitle, title: pollTitle } : {}),
     };
     return this;
   }

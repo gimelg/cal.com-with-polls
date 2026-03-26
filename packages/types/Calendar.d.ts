@@ -213,6 +213,9 @@ export interface CalendarEvent {
   // It has responses to all the fields(system + user)
   responses?: CalEventResponses | null;
 
+  pollUid?: string;
+  pollTitle?: string;
+
   // It just has responses to only the user fields. It allows to easily iterate over to show only user fields
   userFieldsResponses?: CalEventResponses | null;
   platformClientId?: string | null;

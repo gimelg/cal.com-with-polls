@@ -38,6 +38,8 @@ export default class AttendeeScheduledEmail extends BaseEmail {
 
   protected async getNodeMailerPayload(): Promise<Record<string, unknown>> {
     const clonedCalEvent = cloneDeep(this.calEvent);
+    const pollTitle = this.calEvent.pollTitle;
+    const isPollBooking = typeof this.calEvent.pollUid === "string" && Boolean(pollTitle);
 
     return {
       icalEvent: generateIcsFile({
@@ -51,7 +53,9 @@ export default class AttendeeScheduledEmail extends BaseEmail {
         this.calEvent,
         this.calEvent.attendees.filter(({ email }) => email !== this.attendee.email).map(({ email }) => email)
       ),
-      subject: `${this.calEvent.title}`,
+      subject: isPollBooking
+        ? this.t("poll_booking_finalized_subject", { pollTitle: pollTitle || this.calEvent.title })
+        : `${this.calEvent.title}`,
       html: await this.getHtml(clonedCalEvent, this.attendee),
       text: this.getTextBody(),
     };

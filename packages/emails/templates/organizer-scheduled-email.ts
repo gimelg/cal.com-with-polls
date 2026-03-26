@@ -41,6 +41,8 @@ export default class OrganizerScheduledEmail extends BaseEmail {
   protected async getNodeMailerPayload(): Promise<Record<string, unknown>> {
     const clonedCalEvent = cloneDeep(this.calEvent);
     const toAddresses = [this.teamMember?.email || this.calEvent.organizer.email];
+    const pollTitle = this.calEvent.pollTitle;
+    const isPollBooking = typeof this.calEvent.pollUid === "string" && Boolean(pollTitle);
 
     return {
       icalEvent: generateIcsFile({
@@ -55,7 +57,9 @@ export default class OrganizerScheduledEmail extends BaseEmail {
         this.calEvent.attendees.map(({ email }) => email),
         true
       ),
-      subject: `${this.newSeat ? `${this.t("new_attendee")}: ` : ""}${this.calEvent.title}`,
+      subject: isPollBooking
+        ? this.t("poll_booking_finalized_subject", { pollTitle: pollTitle || this.calEvent.title })
+        : `${this.newSeat ? `${this.t("new_attendee")}: ` : ""}${this.calEvent.title}`,
       html: await this.getHtml(
         clonedCalEvent,
         this.attendee || this.calEvent.organizer,

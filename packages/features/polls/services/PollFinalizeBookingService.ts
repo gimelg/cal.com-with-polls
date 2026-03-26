@@ -171,6 +171,7 @@ export class PollFinalizeBookingService {
       metadata: {
         pollId: String(poll.id),
         pollUid: poll.uid,
+        pollTitle: poll.title,
         pollOptionId: String(pollOption.id),
       },
       responses,

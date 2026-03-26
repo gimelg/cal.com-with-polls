@@ -9,6 +9,7 @@ function buildPollContext(overrides?: Partial<PollFinalizeContext>): PollFinaliz
   return {
     id: 1,
     uid: "poll_1",
+    title: "Planning Poll",
     eventTypeId: 100,
     organizerId: 200,
     timeZone: "UTC",
@@ -89,6 +90,10 @@ describe("PollFinalizeBookingService", () => {
           start: optionStart.toISOString(),
           end: optionEnd.toISOString(),
           idempotencyKey: "poll-finalize:1:11",
+          metadata: expect.objectContaining({
+            pollUid: "poll_1",
+            pollTitle: "Planning Poll",
+          }),
           noEmail: false,
           responses: expect.objectContaining({
             email: "alice@example.com",

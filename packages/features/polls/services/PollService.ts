@@ -610,6 +610,10 @@ export class PollService {
       finalizedBookingId: finalizeResponse.bookingId,
     });
 
+    if (finalizeResponse.bookingId) {
+      return finalizedPoll;
+    }
+
     try {
       await this.onPollFinalized({
         pollId: finalizedPoll.id,
@@ -666,10 +670,11 @@ function formatPollFinalizedSlot({
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   };
 
   const formattedStart = new Intl.DateTimeFormat(locale, dateFormatOptions).format(startTime);
   const formattedEnd = new Intl.DateTimeFormat(locale, dateFormatOptions).format(endTime);
 
-  return `${formattedStart} - ${formattedEnd} (${timeZone})`;
+  return `${formattedStart} - ${formattedEnd}`;
 }

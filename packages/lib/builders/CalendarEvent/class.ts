@@ -37,6 +37,8 @@ class CalendarEventClass implements CalendarEvent {
   iCalSequence?: number | null;
   customReplyToEmail?: string | null;
   organizationId?: number | null;
+  pollUid?: string;
+  pollTitle?: string;
 
   constructor(initProps?: CalendarEvent) {
     // If more parameters are given we update this

@@ -51,6 +51,7 @@ const pollDetailsSelect = {
 const pollFinalizeContextSelect = {
   id: true,
   uid: true,
+  title: true,
   eventTypeId: true,
   organizerId: true,
   timeZone: true,
