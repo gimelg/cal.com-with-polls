@@ -48,21 +48,30 @@ const YES_OR_IF_NEEDED: PollVoteType[] = ["YES", "IF_NEEDED"];
 const POLL_ATTENDEE_NAME = "Poll participants";
 
 function defaultIsIdempotencyConflictError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
+  if (!error || typeof error !== "object") {
     return false;
   }
 
-  const knownRequestError = error as Prisma.PrismaClientKnownRequestError;
+  const knownRequestError = error as Partial<Prisma.PrismaClientKnownRequestError> & {
+    code?: unknown;
+    meta?: unknown;
+  };
   if (knownRequestError.code !== "P2002") {
     return false;
   }
 
-  const target = knownRequestError.meta?.target;
+  const errorMeta = (knownRequestError.meta || {}) as { target?: unknown };
+  const target = errorMeta.target;
   if (Array.isArray(target)) {
     return target.includes("idempotencyKey");
   }
 
-  return target === "idempotencyKey";
+  if (target === "idempotencyKey") {
+    return true;
+  }
+
+  const serializedMeta = JSON.stringify(errorMeta);
+  return serializedMeta.includes("idempotencyKey");
 }
 
 export class PollFinalizeBookingService {

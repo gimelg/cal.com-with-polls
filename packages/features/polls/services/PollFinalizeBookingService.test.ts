@@ -129,6 +129,43 @@ describe("PollFinalizeBookingService", () => {
     expect(findBookingByIdempotencyKey).toHaveBeenCalledWith("poll-finalize:1:11");
   });
 
+  it("returns existing booking for prisma driverAdapter idempotency conflicts", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+
+    const createRegularBooking = vi.fn().mockRejectedValue({
+      name: "PrismaClientKnownRequestError",
+      code: "P2002",
+      meta: {
+        modelName: "Booking",
+        driverAdapterError: {
+          cause: {
+            constraint: {
+              fields: ['"idempotencyKey"'],
+            },
+          },
+        },
+      },
+    });
+    const findBookingByIdempotencyKey = vi.fn().mockResolvedValue({ id: 92 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey,
+      findBookingByUid: vi.fn(),
+    });
+
+    const result = await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    expect(result.bookingId).toBe(92);
+    expect(findBookingByIdempotencyKey).toHaveBeenCalledWith("poll-finalize:1:11");
+  });
+
   it("throws when finalized option has no accepted participants", async () => {
     const pollRepository = {
       getPollFinalizeContextById: vi.fn().mockResolvedValue(
