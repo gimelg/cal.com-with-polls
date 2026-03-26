@@ -14,11 +14,18 @@ export type PollInviteEmailProps = {
 
 export const PollInviteEmail = (
   props: PollInviteEmailProps & Partial<React.ComponentProps<typeof BaseEmailHtml>>
-) => {
-  const bodyKey = props.hideBranding ? "poll_invite_email_body_no_branding" : "poll_invite_email_body";
+): JSX.Element => {
+  let bodyKey = "poll_invite_email_body";
+  if (props.hideBranding) {
+    bodyKey = "poll_invite_email_body_no_branding";
+  }
+
+  const showDescription = Boolean(props.pollDescription);
 
   return (
-    <BaseEmailHtml subject={props.t("poll_invite_email_subject", { pollTitle: props.pollTitle })}>
+    <BaseEmailHtml
+      subject={props.t("poll_invite_email_subject", { pollTitle: props.pollTitle })}
+      hideLogo={props.hideBranding}>
       <p
         style={{
           fontWeight: 600,
@@ -38,9 +45,9 @@ export const PollInviteEmail = (
         })}
       </p>
 
-      {props.pollDescription ? (
+      {showDescription && (
         <p style={{ fontWeight: 400, lineHeight: "24px", marginTop: "12px" }}>{props.pollDescription}</p>
-      ) : null}
+      )}
 
       <hr style={{ marginTop: "24px", marginBottom: "24px" }} />
 

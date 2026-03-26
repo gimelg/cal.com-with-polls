@@ -15,18 +15,26 @@ export type PollFinalizedEmailProps = {
 
 export const PollFinalizedEmail = (
   props: PollFinalizedEmailProps & Partial<React.ComponentProps<typeof BaseEmailHtml>>
-) => {
-  const bodyKey =
-    props.recipientRole === "ORGANIZER"
-      ? props.hideBranding
-        ? "poll_finalized_email_body_organizer_no_branding"
-        : "poll_finalized_email_body_organizer"
-      : props.hideBranding
-        ? "poll_finalized_email_body_participant_no_branding"
-        : "poll_finalized_email_body_participant";
+): JSX.Element => {
+  let bodyKey = "poll_finalized_email_body_participant";
+  if (props.recipientRole === "ORGANIZER") {
+    bodyKey = "poll_finalized_email_body_organizer";
+  }
+
+  if (props.hideBranding) {
+    if (props.recipientRole === "ORGANIZER") {
+      bodyKey = "poll_finalized_email_body_organizer_no_branding";
+    } else {
+      bodyKey = "poll_finalized_email_body_participant_no_branding";
+    }
+  }
+
+  const showDescription = Boolean(props.pollDescription);
 
   return (
-    <BaseEmailHtml subject={props.t("poll_finalized_email_subject", { pollTitle: props.pollTitle })}>
+    <BaseEmailHtml
+      subject={props.t("poll_finalized_email_subject", { pollTitle: props.pollTitle })}
+      hideLogo={props.hideBranding}>
       <p
         style={{
           fontWeight: 600,
@@ -45,9 +53,9 @@ export const PollFinalizedEmail = (
         })}
       </p>
 
-      {props.pollDescription ? (
+      {showDescription && (
         <p style={{ fontWeight: 400, lineHeight: "24px", marginTop: "12px" }}>{props.pollDescription}</p>
-      ) : null}
+      )}
 
       <p style={{ fontWeight: 500, lineHeight: "24px", marginTop: "16px" }}>
         {props.t("poll_finalized_email_selected_slot", { slot: props.selectedSlot })}
