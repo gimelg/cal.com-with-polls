@@ -1,5 +1,6 @@
 import { sendPollInviteEmail } from "@calcom/emails/poll-email-service";
 import { PollService } from "@calcom/features/polls/services/PollService";
+import { getHideBranding } from "@calcom/features/profile/lib/hideBranding";
 import { getTranslation } from "@calcom/i18n/server";
 import { WEBAPP_URL } from "@calcom/lib/constants";
 import { TRPCError } from "@trpc/server";
@@ -95,8 +96,21 @@ const redactEmailForLogs = (email: string) => {
   return `${localPart.slice(0, 2)}***${localPart.slice(-1)}@${domainPart}`;
 };
 
-const shouldHideBrandingForOrganizer = (user: { hideBranding?: boolean; organization?: { hideBranding?: boolean } | null }) => {
-  return Boolean(user.hideBranding || user.organization?.hideBranding);
+const shouldHideBrandingForOrganizer = async (user: {
+  id: number;
+  hideBranding?: boolean;
+  organization?: { hideBranding?: boolean } | null;
+}) => {
+  try {
+    return await getHideBranding({ userId: user.id });
+  } catch (error) {
+    console.error("[polls] Failed resolving hideBranding from profile, using session fallback", {
+      organizerId: user.id,
+      error,
+    });
+
+    return Boolean(user.hideBranding || user.organization?.hideBranding);
+  }
 };
 
 export const pollsRouter = router({
@@ -111,7 +125,7 @@ export const pollsRouter = router({
 
     if (poll.visibility === "INVITE_ONLY" && poll.participants.length > 0) {
       const organizerName = ctx.user.name || ctx.user.email;
-      const hideBranding = shouldHideBrandingForOrganizer(ctx.user);
+      const hideBranding = await shouldHideBrandingForOrganizer(ctx.user);
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
       console.info("[polls] Sending invite emails", {
@@ -211,7 +225,7 @@ export const pollsRouter = router({
 
     if (participant) {
       const organizerName = ctx.user.name || ctx.user.email;
-      const hideBranding = shouldHideBrandingForOrganizer(ctx.user);
+      const hideBranding = await shouldHideBrandingForOrganizer(ctx.user);
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
       const startedAt = Date.now();
@@ -297,7 +311,7 @@ export const pollsRouter = router({
       }
 
       const organizerName = ctx.user.name || ctx.user.email;
-      const hideBranding = shouldHideBrandingForOrganizer(ctx.user);
+      const hideBranding = await shouldHideBrandingForOrganizer(ctx.user);
       const t = await getTranslation(ctx.user.locale || "en", "common");
 
       const startedAt = Date.now();

@@ -7,6 +7,7 @@ const addPollParticipantForOrganizerMock = vi.fn();
 const reopenPollManuallyMock = vi.fn();
 const cancelPollManuallyMock = vi.fn();
 const sendPollInviteEmailMock = vi.fn();
+const getHideBrandingMock = vi.fn();
 const getUserSessionMock = vi.fn();
 const getTranslationMock = vi.fn();
 
@@ -37,6 +38,10 @@ vi.mock("@calcom/i18n/server", () => ({
   getTranslation: (...args: unknown[]) => getTranslationMock(...args),
 }));
 
+vi.mock("@calcom/features/profile/lib/hideBranding", () => ({
+  getHideBranding: (...args: unknown[]) => getHideBrandingMock(...args),
+}));
+
 import { pollsRouter } from "./_router";
 
 const makeCaller = () => {
@@ -64,6 +69,7 @@ describe("viewer polls router", () => {
     });
 
     getTranslationMock.mockResolvedValue((key: string) => key);
+    getHideBrandingMock.mockResolvedValue(false);
     sendPollInviteEmailMock.mockResolvedValue(undefined);
   });
 
@@ -117,12 +123,48 @@ describe("viewer polls router", () => {
     });
 
     expect(sendPollInviteEmailMock).toHaveBeenCalledTimes(2);
+    expect(getHideBrandingMock).toHaveBeenCalledWith({ userId: 10 });
     expect(sendPollInviteEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "alex@example.com",
         participantName: "Alex",
         pollTitle: "Planning",
         hideBranding: false,
+      })
+    );
+
+    getHideBrandingMock.mockResolvedValueOnce(true);
+
+    await caller.create({
+      eventTypeId: 100,
+      title: "Planning",
+      description: "Pick a slot",
+      timeZone: "UTC",
+      visibility: "INVITE_ONLY",
+      isAnonymous: false,
+      finalizationMode: "MANUAL",
+      expiresAt: null,
+      options: [
+        {
+          startTime: new Date("2026-04-01T10:00:00.000Z"),
+          endTime: new Date("2026-04-01T10:30:00.000Z"),
+        },
+      ],
+      participants: [
+        {
+          name: "Alex",
+          email: "alex@example.com",
+        },
+        {
+          name: "Bianca",
+          email: "bianca@example.com",
+        },
+      ],
+    });
+
+    expect(sendPollInviteEmailMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        hideBranding: true,
       })
     );
 

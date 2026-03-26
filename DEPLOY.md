@@ -55,6 +55,31 @@ docker compose pull
 docker compose up -d --force-recreate
 ```
 
+## 4) Free up Docker disk space (safe cleanup)
+
+Run this on the VPS before/after deploy when disk gets tight:
+
+```bash
+# inspect usage
+docker system df
+docker images "ghcr.io/gimelg/calcom-custom"
+
+# safe cleanup (keeps named volumes)
+docker container prune -f
+docker image prune -f
+docker builder prune -f
+docker network prune -f
+```
+
+Optional (recommended): remove very old custom image tags manually, but keep the current tag and at least one rollback tag:
+
+```bash
+docker images "ghcr.io/gimelg/calcom-custom"
+# example
+docker rmi ghcr.io/gimelg/calcom-custom:polls-v1
+docker rmi ghcr.io/gimelg/calcom-custom:polls-v2
+```
+
 ## Notes
 
 - Never use `docker compose down -v`.
