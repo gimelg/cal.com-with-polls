@@ -1,7 +1,7 @@
 import { getBookingUrl, getCancelLink, getRescheduleLink } from "@calcom/lib/CalEventParser";
 import type { CalendarEvent, Person } from "@calcom/types/Calendar";
 
-export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person }) {
+export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person }): JSX.Element | null {
   // Only the original attendee can make changes to the event
   // Guests cannot
   const t = props.attendee.language.translate;
@@ -72,7 +72,7 @@ export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person })
                   marginRight: "5px",
                   textDecoration: "underline",
                 }}>
-                <>{t("reschedule")}</>
+                {t("reschedule")}
               </a>
               {hasCancelLink && <>{t("or_lowercase")}</>}
             </span>
@@ -86,7 +86,7 @@ export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person })
                   marginLeft: "5px",
                   textDecoration: "underline",
                 }}>
-                <>{t("cancel")}</>
+                {t("cancel")}
               </a>
             </span>
           )}
@@ -108,7 +108,7 @@ export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person })
                   marginLeft: "5px",
                   textDecoration: "underline",
                 }}>
-                <>{t("check_here")}</>
+                {t("check_here")}
               </a>
             </span>
           )}
