@@ -65,6 +65,12 @@ docker system df
 docker images "ghcr.io/gimelg/calcom-custom"
 
 # safe cleanup (keeps named volumes)
+- List images with IDs and size:
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}"
+- Delete one image by ID:
+docker rmi <IMAGE_ID>
+- Delete multiple at once:
+docker rmi <ID1> <ID2> <ID3>
 docker container prune -f
 docker image prune -f
 docker builder prune -f
