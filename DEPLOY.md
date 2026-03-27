@@ -16,24 +16,49 @@ git push
 
 # pick a new tag every time
 export TAG=polls-v5
+export INIT_TAG=${TAG}-init
+export CACHE_REF=ghcr.io/gimelg/calcom-custom:buildcache
 
-docker buildx build --platform linux/amd64 --no-cache --pull \
+docker buildx build --platform linux/amd64 --pull \
+  --target runner \
+  --cache-from type=registry,ref=$CACHE_REF \
+  --cache-to type=registry,ref=$CACHE_REF,mode=max \
+  -t ghcr.io/gimelg/calcom-custom:$TAG \
+  --push .
+
+docker buildx build --platform linux/amd64 --pull \
+  --target migrator \
+  --cache-from type=registry,ref=$CACHE_REF \
+  --cache-to type=registry,ref=$CACHE_REF,mode=max \
+  -t ghcr.io/gimelg/calcom-custom:$INIT_TAG \
+  --push .
+```
+
+Optional cold refresh after large upstream syncs (forces dependency/base refresh):
+
+```bash
+docker buildx build --platform linux/amd64 --pull --no-cache \
+  --target runner \
+  --cache-to type=registry,ref=$CACHE_REF,mode=max \
   -t ghcr.io/gimelg/calcom-custom:$TAG \
   --push .
 ```
 
-Optional sanity check:
+Optional sanity checks:
 
 ```bash
-docker run --rm --platform linux/amd64 ghcr.io/gimelg/calcom-custom:$TAG yarn -v
+docker run --rm --platform linux/amd64 ghcr.io/gimelg/calcom-custom:$TAG node --version
+docker run --rm --platform linux/amd64 ghcr.io/gimelg/calcom-custom:$INIT_TAG npx prisma --version
 ```
 
 ## 2) Deploy on VPS
 
-Update `docker-compose.yml` image tag:
+Update `docker-compose.yml` image tags:
 
 ```yaml
 services:
+  calcom-migrate:
+    image: ghcr.io/gimelg/calcom-custom:polls-v5-init
   calcom:
     image: ghcr.io/gimelg/calcom-custom:polls-v5
 ```
@@ -46,9 +71,15 @@ docker compose up -d --force-recreate
 docker logs --tail=120 calcom
 ```
 
+Run seeding only when needed (for example after app-store metadata/key changes):
+
+```bash
+docker compose --profile seed up --force-recreate calcom-seed
+```
+
 ## 3) Rollback (if needed)
 
-Set image back to the previous tag in `docker-compose.yml`, then:
+Set `calcom` and `calcom-migrate` image tags back to the previous release in `docker-compose.yml`, then:
 
 ```bash
 docker compose pull
@@ -138,3 +169,4 @@ git rebase --abort
 - Never use `docker compose down -v`.
 - Never run `docker volume prune` on this server.
 - Reuse existing volumes: `calcom_database-data` and `calcom_redis-data`.
+- `calcom` no longer runs migrations/seeding on startup; `calcom-migrate` handles migrations during deploy, and `calcom-seed` is manual/on-demand.
