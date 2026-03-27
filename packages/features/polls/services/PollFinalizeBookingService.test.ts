@@ -129,6 +129,68 @@ describe("PollFinalizeBookingService", () => {
     expect(findBookingByIdempotencyKey).toHaveBeenCalledWith("poll-finalize:1:11");
   });
 
+  it("falls back to booking lookup by poll metadata when idempotency key lookup misses", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+    const createRegularBooking = vi.fn().mockRejectedValue(new Error("duplicate"));
+    const findBookingByIdempotencyKey = vi.fn().mockResolvedValue(null);
+    const findBookingByPollMetadata = vi.fn().mockResolvedValue({ id: 93 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey,
+      findBookingByPollMetadata,
+      findBookingByUid: vi.fn(),
+      isIdempotencyConflictError: () => true,
+    });
+
+    const result = await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    expect(result.bookingId).toBe(93);
+    expect(findBookingByPollMetadata).toHaveBeenCalledWith({
+      pollId: 1,
+      pollOptionId: 11,
+      organizerId: 200,
+    });
+  });
+
+  it("recovers by metadata lookup even when error is not recognized as idempotency conflict", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+    const createRegularBooking = vi
+      .fn()
+      .mockRejectedValue(new Error("An error occurred while querying the database."));
+    const findBookingByIdempotencyKey = vi.fn().mockResolvedValue(null);
+    const findBookingByPollMetadata = vi.fn().mockResolvedValue({ id: 95 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey,
+      findBookingByPollMetadata,
+      findBookingByUid: vi.fn(),
+      isIdempotencyConflictError: () => false,
+    });
+
+    const result = await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    expect(result.bookingId).toBe(95);
+    expect(findBookingByPollMetadata).toHaveBeenCalledWith({
+      pollId: 1,
+      pollOptionId: 11,
+      organizerId: 200,
+    });
+  });
+
   it("returns existing booking for prisma driverAdapter idempotency conflicts", async () => {
     const pollRepository = {
       getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
@@ -164,6 +226,51 @@ describe("PollFinalizeBookingService", () => {
 
     expect(result.bookingId).toBe(92);
     expect(findBookingByIdempotencyKey).toHaveBeenCalledWith("poll-finalize:1:11");
+  });
+
+  it("recovers from wrapped prisma idempotency conflicts", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+
+    const wrappedError = new Error("An error occurred while querying the database.");
+    (wrappedError as Error & { cause?: unknown }).cause = {
+      code: "P2002",
+      meta: {
+        modelName: "Booking",
+        driverAdapterError: {
+          cause: {
+            originalCode: "23505",
+            originalMessage:
+              'duplicate key value violates unique constraint "Booking_idempotencyKey_key"',
+          },
+        },
+      },
+    };
+
+    const createRegularBooking = vi.fn().mockRejectedValue(wrappedError);
+    const findBookingByIdempotencyKey = vi.fn().mockResolvedValue(null);
+    const findBookingByPollMetadata = vi.fn().mockResolvedValue({ id: 94 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey,
+      findBookingByPollMetadata,
+      findBookingByUid: vi.fn(),
+    });
+
+    const result = await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    expect(result.bookingId).toBe(94);
+    expect(findBookingByPollMetadata).toHaveBeenCalledWith({
+      pollId: 1,
+      pollOptionId: 11,
+      organizerId: 200,
+    });
   });
 
   it("throws when finalized option has no accepted participants", async () => {

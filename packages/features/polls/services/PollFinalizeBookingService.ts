@@ -40,6 +40,11 @@ type PollFinalizeBookingServiceDeps = {
     };
   }) => Promise<PollBookingCreateResult>;
   findBookingByIdempotencyKey?: (idempotencyKey: string) => Promise<{ id: number } | null>;
+  findBookingByPollMetadata?: (input: {
+    pollId: number;
+    pollOptionId: number;
+    organizerId: number;
+  }) => Promise<{ id: number } | null>;
   findBookingByUid?: (uid: string) => Promise<{ id: number } | null>;
   isIdempotencyConflictError?: (error: unknown) => boolean;
 };
@@ -48,30 +53,36 @@ const YES_OR_IF_NEEDED: PollVoteType[] = ["YES", "IF_NEEDED"];
 const POLL_ATTENDEE_NAME = "Poll participants";
 
 function defaultIsIdempotencyConflictError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
+  const queue: unknown[] = [error];
+  const visited = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (!candidate || typeof candidate !== "object" || visited.has(candidate)) {
+      continue;
+    }
+
+    visited.add(candidate);
+
+    const knownRequestError = candidate as Partial<Prisma.PrismaClientKnownRequestError> & {
+      code?: unknown;
+      meta?: unknown;
+      cause?: unknown;
+    };
+
+    if (knownRequestError.code === "P2002") {
+      const serialized = JSON.stringify(knownRequestError.meta || candidate);
+      if (serialized.includes("idempotencyKey") || serialized.includes("Booking_idempotencyKey_key")) {
+        return true;
+      }
+    }
+
+    if (knownRequestError.cause) {
+      queue.push(knownRequestError.cause);
+    }
   }
 
-  const knownRequestError = error as Partial<Prisma.PrismaClientKnownRequestError> & {
-    code?: unknown;
-    meta?: unknown;
-  };
-  if (knownRequestError.code !== "P2002") {
-    return false;
-  }
-
-  const errorMeta = (knownRequestError.meta || {}) as { target?: unknown };
-  const target = errorMeta.target;
-  if (Array.isArray(target)) {
-    return target.includes("idempotencyKey");
-  }
-
-  if (target === "idempotencyKey") {
-    return true;
-  }
-
-  const serializedMeta = JSON.stringify(errorMeta);
-  return serializedMeta.includes("idempotencyKey");
+  return false;
 }
 
 export class PollFinalizeBookingService {
@@ -79,6 +90,9 @@ export class PollFinalizeBookingService {
   private readonly createRegularBooking: NonNullable<PollFinalizeBookingServiceDeps["createRegularBooking"]>;
   private readonly findBookingByIdempotencyKey: NonNullable<
     PollFinalizeBookingServiceDeps["findBookingByIdempotencyKey"]
+  >;
+  private readonly findBookingByPollMetadata: NonNullable<
+    PollFinalizeBookingServiceDeps["findBookingByPollMetadata"]
   >;
   private readonly findBookingByUid: NonNullable<PollFinalizeBookingServiceDeps["findBookingByUid"]>;
   private readonly isIdempotencyConflictError: NonNullable<
@@ -99,6 +113,33 @@ export class PollFinalizeBookingService {
         return await prisma.booking.findUnique({
           where: {
             idempotencyKey,
+          },
+          select: {
+            id: true,
+          },
+        });
+      });
+    this.findBookingByPollMetadata =
+      deps?.findBookingByPollMetadata ??
+      (async ({ pollId, pollOptionId, organizerId }) => {
+        return await prisma.booking.findFirst({
+          where: {
+            userId: organizerId,
+            metadata: {
+              path: ["pollId"],
+              equals: String(pollId),
+            },
+            AND: [
+              {
+                metadata: {
+                  path: ["pollOptionId"],
+                  equals: String(pollOptionId),
+                },
+              },
+            ],
+          },
+          orderBy: {
+            id: "desc",
           },
           select: {
             id: true,
@@ -211,16 +252,52 @@ export class PollFinalizeBookingService {
 
       return { bookingId: null };
     } catch (error) {
-      if (!this.isIdempotencyConflictError(error)) {
-        throw error;
-      }
+      const isIdempotencyConflict = this.isIdempotencyConflictError(error);
+
+      console.warn("[polls] Booking creation failed during poll finalization", {
+        pollId: poll.id,
+        pollOptionId: pollOption.id,
+        organizerId: poll.organizerId,
+        isIdempotencyConflict,
+      });
 
       const existingBooking = await this.findBookingByIdempotencyKey(idempotencyKey);
       if (existingBooking) {
+        console.info("[polls] Reused existing booking after booking creation failure (idempotencyKey lookup)", {
+          pollId: poll.id,
+          pollOptionId: pollOption.id,
+          bookingId: existingBooking.id,
+          isIdempotencyConflict,
+        });
+
         return {
           bookingId: existingBooking.id,
         };
       }
+
+      const existingBookingByMetadata = await this.findBookingByPollMetadata({
+        pollId: poll.id,
+        pollOptionId: pollOption.id,
+        organizerId: poll.organizerId,
+      });
+      if (existingBookingByMetadata) {
+        console.info("[polls] Reused existing booking after booking creation failure (metadata lookup)", {
+          pollId: poll.id,
+          pollOptionId: pollOption.id,
+          bookingId: existingBookingByMetadata.id,
+          isIdempotencyConflict,
+        });
+
+        return {
+          bookingId: existingBookingByMetadata.id,
+        };
+      }
+
+      console.error("[polls] Unable to recover booking after booking creation failure", {
+        pollId: poll.id,
+        pollOptionId: pollOption.id,
+        isIdempotencyConflict,
+      });
 
       throw error;
     }
