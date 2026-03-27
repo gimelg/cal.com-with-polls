@@ -39,13 +39,14 @@ export function ManageLink(props: { calEvent: CalendarEvent; attendee: Person })
   const isPollBooking = typeof props.calEvent.pollUid === "string";
   const shouldDisplayRescheduleLink = Boolean(hasRescheduleLink && !isRecurringEvent && !isPollBooking);
   const isTeamMember = props.calEvent.team?.members.some((member) => props.attendee.email === member.email);
+  const canManagePollBooking = isPollBooking;
   let managePrompt = t("need_to_make_a_change");
   if (isPollBooking) {
     managePrompt = t("unable_to_attend_question");
   }
 
   if (
-    (isOriginalAttendee || isOrganizer || isTeamMember) &&
+    (canManagePollBooking || isOriginalAttendee || isOrganizer || isTeamMember) &&
     (hasCancelLink || (!isRecurringEvent && hasRescheduleLink) || hasBookingLink)
   ) {
     return (

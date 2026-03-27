@@ -93,6 +93,14 @@ export default class OrganizerScheduledEmail extends BaseEmail {
       subject = this.t("poll_booking_finalized_subject", { pollTitle: pollTitle || calEventForEmail.title });
     }
 
+    const replyToHeader = isPollBooking
+      ? getReplyToHeader(calEventForEmail, undefined, false)
+      : getReplyToHeader(
+          calEventForEmail,
+          calEventForEmail.attendees.map(({ email }) => email),
+          true
+        );
+
     this.calEvent = calEventForEmail;
 
     return {
@@ -103,11 +111,7 @@ export default class OrganizerScheduledEmail extends BaseEmail {
       }),
       from: `${EMAIL_FROM_NAME} <${this.getMailerOptions().from}>`,
       to: toAddresses.join(","),
-      ...getReplyToHeader(
-        calEventForEmail,
-        calEventForEmail.attendees.map(({ email }) => email),
-        true
-      ),
+      ...replyToHeader,
       subject,
       html: await this.getHtml(
         calEventForEmail,
