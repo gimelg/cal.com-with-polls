@@ -143,6 +143,7 @@ const getPollPublicUrl = (uid: string) => {
   return new URL(path, window.location.origin).toString();
 };
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: This component intentionally co-locates poll management interactions to avoid splitting tightly coupled mutation and UI state.
 export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
   const { t } = useLocale();
   const utils = trpc.useUtils();
@@ -643,13 +644,413 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
     }
   };
 
+  let pollListContent: JSX.Element;
+  if (isPending) {
+    pollListContent = (
+      <div className="rounded-lg border border-subtle p-6 text-base text-default">{t("loading")}</div>
+    );
+  } else if (polls && polls.length > 0) {
+    pollListContent = (
+      <div className="stack-y-4">
+        {/* biome-ignore lint/complexity/noExcessiveLinesPerFunction: Poll card rendering has dense conditional controls and is clearer when kept in one callback. */}
+        {polls.map((poll) => {
+          const finalizedOption = poll.finalizedOptionId
+            ? (poll.options.find((option) => option.id === poll.finalizedOptionId) ?? null)
+            : null;
+          const participantsById = new Map(poll.participants.map((participant) => [participant.id, participant]));
+
+          return (
+            <div key={poll.id} className="min-w-0 overflow-hidden rounded-lg border border-subtle p-6">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h4 className="font-semibold text-emphasis text-lg">{poll.title}</h4>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Badge variant={getPollStatusVariant(poll.status)}>
+                      {t(`poll_status_${poll.status.toLowerCase()}`)}
+                    </Badge>
+                    <Badge variant="gray">{t(`poll_finalization_${poll.finalizationMode.toLowerCase()}`)}</Badge>
+                    <Badge variant="gray">{t(`poll_visibility_${poll.visibility.toLowerCase()}`)}</Badge>
+                    {poll.isAnonymous ? <Badge variant="gray">{t("poll_anonymous_badge")}</Badge> : null}
+                    <Badge variant="gray">
+                      {t(
+                        getPollParticipantIdentityMode(poll) === "NAME_ONLY"
+                          ? "poll_participant_identity_name_only"
+                          : "poll_participant_identity_name_and_email"
+                      )}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-muted text-sm">
+                    {t("poll_response_count", {
+                      participants: poll.participants.length,
+                      votes: poll.votes.length,
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {poll.status === "OPEN" ? (
+                    <>
+                      <Button
+                        type="button"
+                        color="secondary"
+                        StartIcon="lock"
+                        loading={closePollMutation.isPending}
+                        disabled={
+                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                        }
+                        onClick={() => closePollMutation.mutate({ pollId: poll.id })}>
+                        {t("close_poll")}
+                      </Button>
+                      <Button
+                        type="button"
+                        color="minimal"
+                        disabled={
+                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                        }
+                        onClick={() =>
+                          setCancelPollTarget({
+                            pollId: poll.id,
+                            pollTitle: poll.title,
+                          })
+                        }>
+                        {t("cancel_poll")}
+                      </Button>
+                    </>
+                  ) : null}
+
+                  {poll.status === "CLOSED" ? (
+                    <>
+                      <Button
+                        type="button"
+                        color="secondary"
+                        disabled={
+                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                        }
+                        loading={reopenPollMutation.isPending}
+                        onClick={() => reopenPollMutation.mutate({ pollId: poll.id })}>
+                        {t("reopen_poll")}
+                      </Button>
+                      <Button
+                        type="button"
+                        color="minimal"
+                        disabled={
+                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                        }
+                        onClick={() =>
+                          setCancelPollTarget({
+                            pollId: poll.id,
+                            pollTitle: poll.title,
+                          })
+                        }>
+                        {t("cancel_poll")}
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="stack-y-2">
+                {poll.options.map((option, index) => {
+                  const voteCounts = getPollOptionVoteCounts(poll, option.id);
+                  const isFinalizedOption = poll.finalizedOptionId === option.id;
+                  const responseToggleKey = getOptionResponseToggleKey(poll.id, option.id);
+                  const isResponsesExpanded = expandedOptionResponses[responseToggleKey] ?? false;
+                  const optionResponses = poll.votes
+                    .filter((vote) => vote.pollOptionId === option.id)
+                    .map((vote) => {
+                      const participant = participantsById.get(vote.participantId);
+                      if (!participant) {
+                        return null;
+                      }
+
+                      return {
+                        participantId: participant.id,
+                        participantName: participant.name,
+                        voteType: vote.voteType,
+                      };
+                    })
+                    .filter(
+                      (
+                        response
+                      ): response is {
+                        participantId: number;
+                        participantName: string;
+                        voteType: PollItem["votes"][number]["voteType"];
+                      } => Boolean(response)
+                    )
+                    .sort((left, right) => {
+                      const voteWeightDifference =
+                        getPollVoteSortWeight(left.voteType) - getPollVoteSortWeight(right.voteType);
+                      if (voteWeightDifference !== 0) {
+                        return voteWeightDifference;
+                      }
+
+                      return left.participantName.localeCompare(right.participantName);
+                    });
+
+                  return (
+                    <div key={option.id} className="rounded-md border border-subtle px-3 py-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-base text-default">
+                            {t("poll_option_number", { number: index + 1 })}
+                          </p>
+                          <p className="text-muted text-sm">
+                            {new Date(option.startTime).toLocaleString()} - {new Date(option.endTime).toLocaleString()}
+                          </p>
+                          <p className="text-muted text-sm">
+                            {t("poll_option_vote_breakdown", {
+                              yes: voteCounts.yes,
+                              ifNeeded: voteCounts.ifNeeded,
+                              no: voteCounts.no,
+                            })}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {isFinalizedOption ? <Badge variant="blue">{t("poll_winner")}</Badge> : null}
+                          {poll.status === "OPEN" || poll.status === "CLOSED" ? (
+                            <Button
+                              type="button"
+                              color="minimal"
+                              loading={finalizePollMutation.isPending}
+                              disabled={finalizePollMutation.isPending}
+                              onClick={() =>
+                                finalizePollMutation.mutate({
+                                  pollId: poll.id,
+                                  optionId: option.id,
+                                })
+                              }>
+                              {t("finalize_with_option")}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          color="minimal"
+                          onClick={() => toggleOptionResponses(poll.id, option.id)}>
+                          {isResponsesExpanded ? t("poll_hide_responses") : t("poll_show_responses")}
+                        </Button>
+                      </div>
+
+                      {isResponsesExpanded ? (
+                        <div className="mt-2 rounded-md border border-subtle bg-subtle p-2">
+                          {optionResponses.length > 0 ? (
+                            <div className="stack-y-2">
+                              {optionResponses.map((response) => (
+                                <div
+                                  key={response.participantId}
+                                  className="flex items-center justify-between gap-2 rounded-md border border-subtle px-2 py-1">
+                                  <p className="text-base text-default">{response.participantName}</p>
+                                  <Badge variant={getPollVoteVariant(response.voteType)}>
+                                    {getPollVoteLabel(response.voteType)}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-muted text-sm">{t("poll_no_option_responses_yet")}</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {poll.visibility === "INVITE_ONLY" ? (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h5 className="font-semibold text-base text-default">{t("poll_invited_participants")}</h5>
+                  </div>
+                  <p className="mb-3 text-muted text-sm">{t("poll_invited_participants_edit_hint")}</p>
+
+                  {poll.status === "OPEN" ? (
+                    <div className="mb-4 rounded-md border border-subtle bg-subtle p-3">
+                      <p className="mb-2 font-medium text-default text-sm">{t("poll_add_participant_after_creation")}</p>
+                      <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                        <TextField
+                          label={t("name")}
+                          placeholder={t("poll_participant_name_placeholder")}
+                          value={getAddParticipantDraft(poll.id).name}
+                          onChange={(event) =>
+                            setAddParticipantField({
+                              pollId: poll.id,
+                              field: "name",
+                              value: event.target.value,
+                            })
+                          }
+                        />
+                        <TextField
+                          type="email"
+                          label={t("email")}
+                          placeholder={t("poll_participant_email_placeholder")}
+                          value={getAddParticipantDraft(poll.id).email}
+                          onChange={(event) =>
+                            setAddParticipantField({
+                              pollId: poll.id,
+                              field: "email",
+                              value: event.target.value,
+                            })
+                          }
+                        />
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            StartIcon="plus"
+                            loading={addParticipantMutation.isPending}
+                            disabled={addParticipantMutation.isPending}
+                            onClick={() => addParticipantToPoll({ pollId: poll.id })}>
+                            {t("poll_add_participant")}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {poll.participants.length > 0 ? (
+                    <div className="stack-y-3">
+                      {poll.participants.map((participant) => {
+                        const draft = getParticipantEditDraft(poll.id, participant);
+                        const normalizedDraftName = draft.name.trim();
+                        const normalizedDraftEmail = draft.email.trim().toLowerCase();
+                        const isDirty =
+                          normalizedDraftName !== participant.name ||
+                          normalizedDraftEmail !== participant.email.toLowerCase();
+
+                        return (
+                          <div key={participant.id} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+                            <TextField
+                              label={t("name")}
+                              value={draft.name}
+                              onChange={(event) =>
+                                setParticipantEditField({
+                                  pollId: poll.id,
+                                  participantId: participant.id,
+                                  baseName: participant.name,
+                                  baseEmail: participant.email,
+                                  field: "name",
+                                  value: event.target.value,
+                                })
+                              }
+                            />
+                            <TextField
+                              type="email"
+                              label={t("email")}
+                              value={draft.email}
+                              onChange={(event) =>
+                                setParticipantEditField({
+                                  pollId: poll.id,
+                                  participantId: participant.id,
+                                  baseName: participant.name,
+                                  baseEmail: participant.email,
+                                  field: "email",
+                                  value: event.target.value,
+                                })
+                              }
+                            />
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                color="secondary"
+                                loading={updateParticipantMutation.isPending}
+                                disabled={updateParticipantMutation.isPending || !isDirty}
+                                onClick={() =>
+                                  saveParticipantUpdate({
+                                    pollId: poll.id,
+                                    participantId: participant.id,
+                                    baseName: participant.name,
+                                    baseEmail: participant.email,
+                                  })
+                                }>
+                                {t("save")}
+                              </Button>
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                color="minimal"
+                                loading={resendParticipantInviteMutation.isPending}
+                                disabled={updateParticipantMutation.isPending || resendParticipantInviteMutation.isPending}
+                                onClick={() =>
+                                  requestResendParticipantInvite({
+                                    pollId: poll.id,
+                                    pollUid: poll.uid,
+                                    participantId: participant.id,
+                                    baseName: participant.name,
+                                    baseEmail: participant.email,
+                                  })
+                                }>
+                                {t("poll_resend_invite")}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-muted text-sm">{t("poll_no_participants_yet")}</p>
+                  )}
+                </div>
+              ) : null}
+
+              {poll.status === "FINALIZED" && finalizedOption ? (
+                <p className="mt-3 text-base text-default">
+                  {t("poll_finalized_slot", {
+                    slot: `${new Date(finalizedOption.startTime).toLocaleString()} - ${new Date(
+                      finalizedOption.endTime
+                    ).toLocaleString()}`,
+                    interpolation: {
+                      escapeValue: false,
+                    },
+                  })}
+                </p>
+              ) : null}
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-muted text-sm">{t("poll_uid_hint", { uid: poll.uid })}</p>
+                <a
+                  className="text-blue-600 text-sm hover:underline"
+                  href={getPollPublicPath(poll.uid)}
+                  target="_blank"
+                  rel="noreferrer">
+                  {getPollPublicPath(poll.uid)}
+                </a>
+                <Button
+                  type="button"
+                  size="sm"
+                  color="minimal"
+                  onClick={() => {
+                    void copyPollUrl(poll.uid);
+                  }}>
+                  {t("poll_copy_link")}
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  } else {
+    pollListContent = (
+      <EmptyScreen
+        Icon="users"
+        headline={t("no_polls_created")}
+        description={t("no_polls_created_description")}
+      />
+    );
+  }
+
   return (
     <div className="stack-y-6 min-w-0">
       <div className="rounded-lg border border-subtle p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-emphasis text-base font-semibold">{t("polls")}</h3>
-            <p className="text-default text-sm">{t("polls_tab_description")}</p>
+            <h3 className="font-semibold text-emphasis text-lg">{t("polls")}</h3>
+            <p className="text-base text-default">{t("polls_tab_description")}</p>
           </div>
           <Button
             type="button"
@@ -677,11 +1078,11 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="text-default mb-1 block text-sm font-medium">
+                <label className="mb-1 block font-medium text-base text-default">
                   {t("poll_finalization_mode")}
                 </label>
                 <select
-                  className="border-default bg-default text-default h-9 w-full rounded-[10px] border px-3 text-sm"
+                  className="h-10 w-full rounded-[10px] border border-default bg-default px-3 text-base text-default"
                   value={finalizationMode}
                   onChange={(event) =>
                     setFinalizationMode(event.target.value as "MANUAL" | "MAJORITY" | "UNANIMOUS")
@@ -692,9 +1093,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                 </select>
               </div>
               <div>
-                <label className="text-default mb-1 block text-sm font-medium">{t("poll_visibility")}</label>
+                <label className="mb-1 block font-medium text-base text-default">{t("poll_visibility")}</label>
                 <select
-                  className="border-default bg-default text-default h-9 w-full rounded-[10px] border px-3 text-sm"
+                  className="h-10 w-full rounded-[10px] border border-default bg-default px-3 text-base text-default"
                   value={visibility}
                   onChange={(event) => {
                     const nextVisibility = event.target.value as "PUBLIC" | "INVITE_ONLY";
@@ -716,7 +1117,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   onChange={(event) => setIsAnonymous(event.target.checked)}
                   description={t("poll_anonymous_responses")}
                 />
-                <p className="text-muted ml-7 mt-1 text-xs">{t("poll_anonymous_responses_hint")}</p>
+                <p className="mt-1 ml-7 text-muted text-sm">{t("poll_anonymous_responses_hint")}</p>
               </div>
             ) : null}
 
@@ -726,16 +1127,16 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
             />
-            <p className="text-muted -mt-2 text-xs">{t("poll_expires_at_hint")}</p>
+            <p className="-mt-2 text-muted text-sm">{t("poll_expires_at_hint")}</p>
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-default text-sm font-semibold">{t("poll_options")}</h4>
+                <h4 className="font-semibold text-base text-default">{t("poll_options")}</h4>
                 <Button type="button" color="minimal" StartIcon="plus" onClick={addOptionDraft}>
                   {t("add_poll_option")}
                 </Button>
               </div>
-              <p className="text-muted mb-3 text-xs">
+              <p className="mb-3 text-muted text-sm">
                 {t("poll_option_duration_hint", { minutes: eventLengthMinutes })}
               </p>
               <div className="stack-y-3">
@@ -782,15 +1183,15 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
 
             <div>
               <div className="mb-2">
-                <h4 className="text-default text-sm font-semibold">{t("poll_participants")}</h4>
+                <h4 className="font-semibold text-base text-default">{t("poll_participants")}</h4>
               </div>
               <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div className="w-full md:max-w-sm">
-                  <label className="text-default mb-1 block text-sm font-medium">
+                  <label className="mb-1 block font-medium text-base text-default">
                     {t("poll_participant_identity_mode")}
                   </label>
                   <select
-                    className="border-default bg-default text-default h-9 w-full rounded-[10px] border px-3 text-sm"
+                    className="h-10 w-full rounded-[10px] border border-default bg-default px-3 text-base text-default"
                     value={participantIdentityMode}
                     onChange={(event) => {
                       const nextIdentityMode = event.target.value as ParticipantIdentityMode;
@@ -807,9 +1208,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   {t("add_participant")}
                 </Button>
               </div>
-              <p className="text-muted mb-3 text-xs">{t("poll_participants_hint")}</p>
+              <p className="mb-3 text-muted text-sm">{t("poll_participants_hint")}</p>
               {participantIdentityMode === "NAME_ONLY" ? (
-                <p className="text-muted mb-3 text-xs">{t("poll_participant_identity_name_only_hint")}</p>
+                <p className="mb-3 text-muted text-sm">{t("poll_participant_identity_name_only_hint")}</p>
               ) : null}
               <div className="stack-y-3">
                 {participantDrafts.map((participant) => (
@@ -884,415 +1285,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
         ) : null}
       </div>
 
-      {isPending ? (
-        <div className="rounded-lg border border-subtle p-6 text-sm text-default">{t("loading")}</div>
-      ) : polls && polls.length > 0 ? (
-        <div className="stack-y-4">
-          {polls.map((poll) => {
-            const finalizedOption = poll.finalizedOptionId
-              ? (poll.options.find((option) => option.id === poll.finalizedOptionId) ?? null)
-              : null;
-            const participantsById = new Map(
-              poll.participants.map((participant) => [participant.id, participant])
-            );
-
-            return (
-              <div key={poll.id} className="min-w-0 overflow-hidden rounded-lg border border-subtle p-6">
-                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h4 className="text-emphasis text-base font-semibold">{poll.title}</h4>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <Badge variant={getPollStatusVariant(poll.status)}>
-                        {t(`poll_status_${poll.status.toLowerCase()}`)}
-                      </Badge>
-                      <Badge variant="gray">
-                        {t(`poll_finalization_${poll.finalizationMode.toLowerCase()}`)}
-                      </Badge>
-                      <Badge variant="gray">{t(`poll_visibility_${poll.visibility.toLowerCase()}`)}</Badge>
-                      {poll.isAnonymous ? <Badge variant="gray">{t("poll_anonymous_badge")}</Badge> : null}
-                      <Badge variant="gray">
-                        {t(
-                          getPollParticipantIdentityMode(poll) === "NAME_ONLY"
-                            ? "poll_participant_identity_name_only"
-                            : "poll_participant_identity_name_and_email"
-                        )}
-                      </Badge>
-                    </div>
-                    <p className="text-muted mt-2 text-xs">
-                      {t("poll_response_count", {
-                        participants: poll.participants.length,
-                        votes: poll.votes.length,
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {poll.status === "OPEN" ? (
-                      <>
-                        <Button
-                          type="button"
-                          color="secondary"
-                          StartIcon="lock"
-                          loading={closePollMutation.isPending}
-                          disabled={
-                            closePollMutation.isPending ||
-                            reopenPollMutation.isPending ||
-                            cancelPollMutation.isPending
-                          }
-                          onClick={() => closePollMutation.mutate({ pollId: poll.id })}>
-                          {t("close_poll")}
-                        </Button>
-                        <Button
-                          type="button"
-                          color="minimal"
-                          disabled={
-                            closePollMutation.isPending ||
-                            reopenPollMutation.isPending ||
-                            cancelPollMutation.isPending
-                          }
-                          onClick={() =>
-                            setCancelPollTarget({
-                              pollId: poll.id,
-                              pollTitle: poll.title,
-                            })
-                          }>
-                          {t("cancel_poll")}
-                        </Button>
-                      </>
-                    ) : null}
-
-                    {poll.status === "CLOSED" ? (
-                      <>
-                        <Button
-                          type="button"
-                          color="secondary"
-                          disabled={
-                            closePollMutation.isPending ||
-                            reopenPollMutation.isPending ||
-                            cancelPollMutation.isPending
-                          }
-                          loading={reopenPollMutation.isPending}
-                          onClick={() => reopenPollMutation.mutate({ pollId: poll.id })}>
-                          {t("reopen_poll")}
-                        </Button>
-                        <Button
-                          type="button"
-                          color="minimal"
-                          disabled={
-                            closePollMutation.isPending ||
-                            reopenPollMutation.isPending ||
-                            cancelPollMutation.isPending
-                          }
-                          onClick={() =>
-                            setCancelPollTarget({
-                              pollId: poll.id,
-                              pollTitle: poll.title,
-                            })
-                          }>
-                          {t("cancel_poll")}
-                        </Button>
-                      </>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="stack-y-2">
-                  {poll.options.map((option, index) => {
-                    const voteCounts = getPollOptionVoteCounts(poll, option.id);
-                    const isFinalizedOption = poll.finalizedOptionId === option.id;
-                    const responseToggleKey = getOptionResponseToggleKey(poll.id, option.id);
-                    const isResponsesExpanded = expandedOptionResponses[responseToggleKey] ?? false;
-                    const optionResponses = poll.votes
-                      .filter((vote) => vote.pollOptionId === option.id)
-                      .map((vote) => {
-                        const participant = participantsById.get(vote.participantId);
-                        if (!participant) {
-                          return null;
-                        }
-
-                        return {
-                          participantId: participant.id,
-                          participantName: participant.name,
-                          voteType: vote.voteType,
-                        };
-                      })
-                      .filter(
-                        (
-                          response
-                        ): response is {
-                          participantId: number;
-                          participantName: string;
-                          voteType: PollItem["votes"][number]["voteType"];
-                        } => Boolean(response)
-                      )
-                      .sort((left, right) => {
-                        const voteWeightDifference =
-                          getPollVoteSortWeight(left.voteType) - getPollVoteSortWeight(right.voteType);
-                        if (voteWeightDifference !== 0) {
-                          return voteWeightDifference;
-                        }
-
-                        return left.participantName.localeCompare(right.participantName);
-                      });
-
-                    return (
-                      <div key={option.id} className="rounded-md border border-subtle px-3 py-2">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="text-default text-sm font-medium">
-                              {t("poll_option_number", { number: index + 1 })}
-                            </p>
-                            <p className="text-muted text-xs">
-                              {new Date(option.startTime).toLocaleString()} -{" "}
-                              {new Date(option.endTime).toLocaleString()}
-                            </p>
-                            <p className="text-muted text-xs">
-                              {t("poll_option_vote_breakdown", {
-                                yes: voteCounts.yes,
-                                ifNeeded: voteCounts.ifNeeded,
-                                no: voteCounts.no,
-                              })}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {isFinalizedOption ? <Badge variant="blue">{t("poll_winner")}</Badge> : null}
-                            {poll.status === "OPEN" || poll.status === "CLOSED" ? (
-                              <Button
-                                type="button"
-                                color="minimal"
-                                loading={finalizePollMutation.isPending}
-                                disabled={finalizePollMutation.isPending}
-                                onClick={() =>
-                                  finalizePollMutation.mutate({
-                                    pollId: poll.id,
-                                    optionId: option.id,
-                                  })
-                                }>
-                                {t("finalize_with_option")}
-                              </Button>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="mt-2">
-                          <Button
-                            type="button"
-                            size="xs"
-                            color="minimal"
-                            onClick={() => toggleOptionResponses(poll.id, option.id)}>
-                            {isResponsesExpanded ? t("poll_hide_responses") : t("poll_show_responses")}
-                          </Button>
-                        </div>
-
-                        {isResponsesExpanded ? (
-                          <div className="mt-2 rounded-md border border-subtle bg-subtle p-2">
-                            {optionResponses.length > 0 ? (
-                              <div className="stack-y-2">
-                                {optionResponses.map((response) => (
-                                  <div
-                                    key={response.participantId}
-                                    className="border-subtle flex items-center justify-between gap-2 rounded-md border px-2 py-1">
-                                    <p className="text-default text-sm">{response.participantName}</p>
-                                    <Badge variant={getPollVoteVariant(response.voteType)}>
-                                      {getPollVoteLabel(response.voteType)}
-                                    </Badge>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-muted text-xs">{t("poll_no_option_responses_yet")}</p>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {poll.visibility === "INVITE_ONLY" ? (
-                  <div className="mt-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h5 className="text-default text-sm font-semibold">{t("poll_invited_participants")}</h5>
-                    </div>
-                    <p className="text-muted mb-3 text-xs">{t("poll_invited_participants_edit_hint")}</p>
-
-                    {poll.status === "OPEN" ? (
-                      <div className="mb-4 rounded-md border border-subtle bg-subtle p-3">
-                        <p className="text-default mb-2 text-xs font-medium">
-                          {t("poll_add_participant_after_creation")}
-                        </p>
-                        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-                          <TextField
-                            label={t("name")}
-                            placeholder={t("poll_participant_name_placeholder")}
-                            value={getAddParticipantDraft(poll.id).name}
-                            onChange={(event) =>
-                              setAddParticipantField({
-                                pollId: poll.id,
-                                field: "name",
-                                value: event.target.value,
-                              })
-                            }
-                          />
-                          <TextField
-                            type="email"
-                            label={t("email")}
-                            placeholder={t("poll_participant_email_placeholder")}
-                            value={getAddParticipantDraft(poll.id).email}
-                            onChange={(event) =>
-                              setAddParticipantField({
-                                pollId: poll.id,
-                                field: "email",
-                                value: event.target.value,
-                              })
-                            }
-                          />
-                          <div className="flex items-end">
-                            <Button
-                              type="button"
-                              StartIcon="plus"
-                              loading={addParticipantMutation.isPending}
-                              disabled={addParticipantMutation.isPending}
-                              onClick={() => addParticipantToPoll({ pollId: poll.id })}>
-                              {t("poll_add_participant")}
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {poll.participants.length > 0 ? (
-                      <div className="stack-y-3">
-                        {poll.participants.map((participant) => {
-                          const draft = getParticipantEditDraft(poll.id, participant);
-                          const normalizedDraftName = draft.name.trim();
-                          const normalizedDraftEmail = draft.email.trim().toLowerCase();
-                          const isDirty =
-                            normalizedDraftName !== participant.name ||
-                            normalizedDraftEmail !== participant.email.toLowerCase();
-
-                          return (
-                            <div key={participant.id} className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-                              <TextField
-                                label={t("name")}
-                                value={draft.name}
-                                onChange={(event) =>
-                                  setParticipantEditField({
-                                    pollId: poll.id,
-                                    participantId: participant.id,
-                                    baseName: participant.name,
-                                    baseEmail: participant.email,
-                                    field: "name",
-                                    value: event.target.value,
-                                  })
-                                }
-                              />
-                              <TextField
-                                type="email"
-                                label={t("email")}
-                                value={draft.email}
-                                onChange={(event) =>
-                                  setParticipantEditField({
-                                    pollId: poll.id,
-                                    participantId: participant.id,
-                                    baseName: participant.name,
-                                    baseEmail: participant.email,
-                                    field: "email",
-                                    value: event.target.value,
-                                  })
-                                }
-                              />
-                              <div className="flex items-end">
-                                <Button
-                                  type="button"
-                                  color="secondary"
-                                  loading={updateParticipantMutation.isPending}
-                                  disabled={updateParticipantMutation.isPending || !isDirty}
-                                  onClick={() =>
-                                    saveParticipantUpdate({
-                                      pollId: poll.id,
-                                      participantId: participant.id,
-                                      baseName: participant.name,
-                                      baseEmail: participant.email,
-                                    })
-                                  }>
-                                  {t("save")}
-                                </Button>
-                              </div>
-                              <div className="flex items-end">
-                                <Button
-                                  type="button"
-                                  color="minimal"
-                                  loading={resendParticipantInviteMutation.isPending}
-                                  disabled={
-                                    updateParticipantMutation.isPending ||
-                                    resendParticipantInviteMutation.isPending
-                                  }
-                                  onClick={() =>
-                                    requestResendParticipantInvite({
-                                      pollId: poll.id,
-                                      pollUid: poll.uid,
-                                      participantId: participant.id,
-                                      baseName: participant.name,
-                                      baseEmail: participant.email,
-                                    })
-                                  }>
-                                  {t("poll_resend_invite")}
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-muted text-xs">{t("poll_no_participants_yet")}</p>
-                    )}
-                  </div>
-                ) : null}
-
-                {poll.status === "FINALIZED" && finalizedOption ? (
-                  <p className="text-default mt-3 text-sm">
-                    {t("poll_finalized_slot", {
-                      slot: `${new Date(finalizedOption.startTime).toLocaleString()} - ${new Date(
-                        finalizedOption.endTime
-                      ).toLocaleString()}`,
-                      interpolation: {
-                        escapeValue: false,
-                      },
-                    })}
-                  </p>
-                ) : null}
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <p className="text-muted text-xs">{t("poll_uid_hint", { uid: poll.uid })}</p>
-                  <a
-                    className="text-xs text-blue-600 hover:underline"
-                    href={getPollPublicPath(poll.uid)}
-                    target="_blank"
-                    rel="noreferrer">
-                    {getPollPublicPath(poll.uid)}
-                  </a>
-                  <Button
-                    type="button"
-                    size="xs"
-                    color="minimal"
-                    onClick={() => {
-                      void copyPollUrl(poll.uid);
-                    }}>
-                    {t("poll_copy_link")}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <EmptyScreen
-          Icon="users"
-          headline={t("no_polls_created")}
-          description={t("no_polls_created_description")}
-        />
-      )}
+      {pollListContent}
 
       <Dialog
         open={Boolean(resendInviteTarget)}

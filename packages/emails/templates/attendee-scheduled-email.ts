@@ -88,6 +88,13 @@ export default class AttendeeScheduledEmail extends BaseEmail {
       subject = this.t("poll_booking_finalized_subject", { pollTitle: pollTitle || calEventForEmail.title });
     }
 
+    const replyToHeader = isPollBooking
+      ? getReplyToHeader(calEventForEmail, undefined, false)
+      : getReplyToHeader(
+          calEventForEmail,
+          calEventForEmail.attendees.filter(({ email }) => email !== this.attendee.email).map(({ email }) => email)
+        );
+
     this.calEvent = calEventForEmail;
 
     return {
@@ -98,10 +105,7 @@ export default class AttendeeScheduledEmail extends BaseEmail {
       }),
       to: `${this.attendee.name} <${this.attendee.email}>`,
       from: `${calEventForEmail.organizer.name} <${this.getMailerOptions().from}>`,
-      ...getReplyToHeader(
-        calEventForEmail,
-        calEventForEmail.attendees.filter(({ email }) => email !== this.attendee.email).map(({ email }) => email)
-      ),
+      ...replyToHeader,
       subject,
       html: await this.getHtml(calEventForEmail, this.attendee),
       text: this.getTextBody(),
