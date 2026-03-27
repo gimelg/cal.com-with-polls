@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { PollFinalizeContext, PollRepository } from "../repositories/PollRepository";
 import { PollFinalizeBookingService } from "./PollFinalizeBookingService";
 
-const optionStart = new Date("2026-05-01T10:00:00.000Z");
-const optionEnd = new Date("2026-05-01T10:30:00.000Z");
+const optionStart: Date = new Date("2026-05-01T10:00:00.000Z");
+const optionEnd: Date = new Date("2026-05-01T10:30:00.000Z");
 
 function buildPollContext(overrides?: Partial<PollFinalizeContext>): PollFinalizeContext {
   return {

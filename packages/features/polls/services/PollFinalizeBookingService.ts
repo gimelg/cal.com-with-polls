@@ -103,13 +103,15 @@ export class PollFinalizeBookingService {
     this.pollRepository = deps?.pollRepository ?? PollRepository.create();
     this.createRegularBooking =
       deps?.createRegularBooking ??
-      (async (input) => {
+      (async (
+        input: Parameters<NonNullable<PollFinalizeBookingServiceDeps["createRegularBooking"]>>[0]
+      ): Promise<PollBookingCreateResult> => {
         const regularBookingService = getRegularBookingService();
         return await regularBookingService.createBooking(input);
       });
     this.findBookingByIdempotencyKey =
       deps?.findBookingByIdempotencyKey ??
-      (async (idempotencyKey) => {
+      (async (idempotencyKey: string): Promise<{ id: number } | null> => {
         return await prisma.booking.findUnique({
           where: {
             idempotencyKey,
@@ -121,7 +123,13 @@ export class PollFinalizeBookingService {
       });
     this.findBookingByPollMetadata =
       deps?.findBookingByPollMetadata ??
-      (async ({ pollId, pollOptionId, organizerId }) => {
+      (async (
+        {
+          pollId,
+          pollOptionId,
+          organizerId,
+        }: Parameters<NonNullable<PollFinalizeBookingServiceDeps["findBookingByPollMetadata"]>>[0]
+      ): Promise<{ id: number } | null> => {
         return await prisma.booking.findFirst({
           where: {
             userId: organizerId,
@@ -148,7 +156,7 @@ export class PollFinalizeBookingService {
       });
     this.findBookingByUid =
       deps?.findBookingByUid ??
-      (async (uid) => {
+      (async (uid: string): Promise<{ id: number } | null> => {
         return await prisma.booking.findUnique({
           where: {
             uid,
