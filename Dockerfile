@@ -1,4 +1,4 @@
-FROM --platform=$TARGETPLATFORM node:20 AS builder
+FROM --platform=$BUILDPLATFORM node:20 AS builder
 WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 ## If we want to read any ENV variable from .env file, we need to first accept and pass it as an argument to the Dockerfile
@@ -36,7 +36,6 @@ COPY apps/web ./apps/web
 COPY apps/api/v2 ./apps/api/v2
 COPY packages ./packages
 RUN yarn config set httpTimeout 1200000
-RUN npx turbo prune --scope=@calcom/web --scope=@calcom/trpc --docker
 RUN yarn install
 # Build and make embed servable from web/public/embed folder
 RUN yarn workspace @calcom/trpc run build
@@ -44,30 +43,28 @@ RUN yarn --cwd packages/embeds/embed-core workspace @calcom/embed-core run build
 RUN yarn --cwd apps/web workspace @calcom/web run copy-app-store-static
 RUN yarn --cwd apps/web workspace @calcom/web run build
 RUN rm -rf node_modules/.cache .yarn/cache apps/web/.next/cache
-FROM node:20 AS builder-two
+
+FROM node:20 AS migrator
 WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
-ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NODE_ENV=production
 COPY package.json .yarnrc.yml turbo.json i18n.json ./
 COPY .yarn ./.yarn
 COPY --from=builder /calcom/yarn.lock ./yarn.lock
 COPY --from=builder /calcom/node_modules ./node_modules
 COPY --from=builder /calcom/packages ./packages
-COPY --from=builder /calcom/apps/web ./apps/web
-COPY --from=builder /calcom/packages/prisma/schema.prisma ./prisma/schema.prisma
 COPY scripts scripts
 RUN chmod +x scripts/*
-# Save value used during this build stage. If NEXT_PUBLIC_WEBAPP_URL and BUILT_NEXT_PUBLIC_WEBAPP_URL differ at
-# run-time, then start.sh will find/replace static values again.
-ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
-  BUILT_NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
-RUN scripts/replace-placeholder.sh http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER ${NEXT_PUBLIC_WEBAPP_URL}
+
 FROM node:20 AS runner
 WORKDIR /calcom
-RUN corepack enable && corepack prepare yarn@4.12.0 --activate
-RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd wget && rm -rf /var/lib/apt/lists/*
-COPY --from=builder-two /calcom ./
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /calcom/apps/web/.next/standalone ./
+COPY --from=builder /calcom/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /calcom/apps/web/public ./apps/web/public
+COPY --from=builder /calcom/scripts/start.sh ./scripts/start.sh
+COPY --from=builder /calcom/scripts/replace-placeholder.sh ./scripts/replace-placeholder.sh
+RUN chmod +x scripts/start.sh scripts/replace-placeholder.sh
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
   BUILT_NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
