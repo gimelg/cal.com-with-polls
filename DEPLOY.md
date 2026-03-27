@@ -64,13 +64,14 @@ Run this on the VPS before/after deploy when disk gets tight:
 docker system df
 docker images "ghcr.io/gimelg/calcom-custom"
 
-# safe cleanup (keeps named volumes)
-- List images with IDs and size:
+# optional: list all images with IDs and size
 docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}"
-- Delete one image by ID:
+
+# optional: delete specific image(s) by ID
 docker rmi <IMAGE_ID>
-- Delete multiple at once:
 docker rmi <ID1> <ID2> <ID3>
+
+# safe cleanup (keeps named volumes)
 docker container prune -f
 docker image prune -f
 docker builder prune -f
@@ -84,6 +85,52 @@ docker images "ghcr.io/gimelg/calcom-custom"
 # example
 docker rmi ghcr.io/gimelg/calcom-custom:polls-v1
 docker rmi ghcr.io/gimelg/calcom-custom:polls-v2
+```
+
+## 5) Sync fork with upstream (keep polls feature on top)
+
+Use this before building a new deploy image so your fork stays current with `calcom/cal.com`
+while preserving your `polls-v1` commits on top.
+
+```bash
+./scripts/sync-upstream.sh
+```
+
+What it does:
+
+- Ensures `upstream` remote exists (defaults to `git@github.com:calcom/cal.com.git`)
+- Fetches `upstream` and `origin`
+- Rebases `polls-v1` onto `upstream/main`
+- Runs `yarn type-check:ci --force`
+- Runs `TZ=UTC yarn test`
+
+Useful options:
+
+```bash
+# sync and auto-push rewritten branch to origin
+./scripts/sync-upstream.sh --push
+
+# skip full tests (faster sync)
+./scripts/sync-upstream.sh --skip-tests
+
+# show all options
+./scripts/sync-upstream.sh --help
+```
+
+About `--push`:
+
+- It pushes with `git push --force-with-lease origin <branch>`
+- Use it after successful rebase/checks when you want the script to publish automatically
+- Without `--push`, the script stops after checks and you can push manually
+
+If rebase conflicts occur:
+
+```bash
+git add <resolved-files>
+git rebase --continue
+
+# or abort
+git rebase --abort
 ```
 
 ## Notes
