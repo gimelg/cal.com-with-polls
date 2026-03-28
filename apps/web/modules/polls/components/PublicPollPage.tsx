@@ -175,7 +175,9 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
   if (isPending) {
     return (
       <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
-        <div className="rounded-lg border border-subtle p-6 text-base text-default">{t("loading")}</div>
+        <div className="rounded-lg border border-subtle p-6 text-default text-lg sm:text-base">
+          {t("loading")}
+        </div>
       </div>
     );
   }
@@ -311,13 +313,13 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
       <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:px-6">
         <div className="mx-auto w-full max-w-2xl rounded-xl border border-subtle p-8 text-center sm:p-10">
           <p className="font-semibold text-2xl text-emphasis">{t("poll_vote_submitted_title")}</p>
-          <p className="mt-3 text-base text-default">
+          <p className="mt-3 text-default text-lg sm:text-base">
             {t("poll_vote_submitted_description", {
               participantName: successfulSubmission.participantName,
               pollTitle: poll.title,
             })}
           </p>
-          <p className="mt-4 text-muted text-sm">{t("poll_vote_submitted_close_hint")}</p>
+          <p className="mt-4 text-base text-muted sm:text-sm">{t("poll_vote_submitted_close_hint")}</p>
         </div>
       </div>
     );
@@ -328,7 +330,9 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
       <div className="rounded-lg border border-subtle p-6">
         <div className="mb-4">
           <h1 className="font-semibold text-2xl text-emphasis">{poll.title}</h1>
-          {poll.description ? <p className="mt-2 text-base text-default">{poll.description}</p> : null}
+          {poll.description ? (
+            <p className="mt-2 text-default text-lg sm:text-base">{poll.description}</p>
+          ) : null}
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -340,7 +344,7 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
         </div>
 
         {poll.expiresAt ? (
-          <div className="mb-4 text-muted text-sm">
+          <div className="mb-4 text-base text-muted sm:text-sm">
             <p>
               {t("poll_expires_at")}: {formatDateTime(poll.expiresAt)}
             </p>
@@ -348,7 +352,7 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
         ) : null}
 
         <div className="mb-6">
-          <h2 className="mb-2 font-semibold text-base text-default">{t("poll_options")}</h2>
+          <h2 className="mb-2 font-semibold text-default text-lg sm:text-base">{t("poll_options")}</h2>
           <div className="stack-y-2">
             {poll.options.map((option, index) => {
               const voteCounts = getPollOptionVoteCounts(poll, option.id);
@@ -359,13 +363,13 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
                   key={option.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-subtle px-3 py-2">
                   <div>
-                    <p className="font-medium text-base text-default">
+                    <p className="font-medium text-default text-lg sm:text-base">
                       {t("poll_option_number", { number: index + 1 })}
                     </p>
-                    <p className="text-muted text-sm">
+                    <p className="text-base text-muted sm:text-sm">
                       {formatDateTime(option.startTime)} - {formatDateTime(option.endTime)}
                     </p>
-                    <p className="text-muted text-sm">
+                    <p className="text-base text-muted sm:text-sm">
                       {t("poll_option_vote_breakdown", {
                         yes: voteCounts.yes,
                         ifNeeded: voteCounts.ifNeeded,
@@ -377,7 +381,8 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          size="xs"
+                          size="lg"
+                          className="text-lg sm:text-base"
                           color={votes[option.id] === "YES" ? "primary" : "minimal"}
                           onClick={() =>
                             setVotes((previous) => ({
@@ -389,7 +394,8 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
                         </Button>
                         <Button
                           type="button"
-                          size="xs"
+                          size="lg"
+                          className="text-lg sm:text-base"
                           color={votes[option.id] === "IF_NEEDED" ? "primary" : "minimal"}
                           onClick={() =>
                             setVotes((previous) => ({
@@ -401,7 +407,8 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
                         </Button>
                         <Button
                           type="button"
-                          size="xs"
+                          size="lg"
+                          className="text-lg sm:text-base"
                           color={votes[option.id] === "NO" ? "primary" : "minimal"}
                           onClick={() =>
                             setVotes((previous) => ({
@@ -422,9 +429,11 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
         </div>
 
         <div>
-          <h2 className="mb-2 font-semibold text-base text-default">{t("poll_respondents_so_far")}</h2>
+          <h2 className="mb-2 font-semibold text-default text-lg sm:text-base">
+            {t("poll_respondents_so_far")}
+          </h2>
           {poll.isAnonymous ? (
-            <p className="text-muted text-sm">
+            <p className="text-base text-muted sm:text-sm">
               {t("poll_participant_count", { count: poll.participants.length })}
             </p>
           ) : (
@@ -436,15 +445,17 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
                   </Badge>
                 ))
               ) : (
-                <p className="text-muted text-sm">{t("poll_no_responses_yet")}</p>
+                <p className="text-base text-muted sm:text-sm">{t("poll_no_responses_yet")}</p>
               )}
             </div>
           )}
         </div>
 
         <div className="mt-6 rounded-md border border-subtle p-4">
-          <h2 className="mb-2 font-semibold text-base text-default">{t("poll_vote_section_title")}</h2>
-          <p className="mb-3 text-muted text-sm">{t("poll_vote_section_description")}</p>
+          <h2 className="mb-2 font-semibold text-default text-lg sm:text-base">
+            {t("poll_vote_section_title")}
+          </h2>
+          <p className="mb-3 text-base text-muted sm:text-sm">{t("poll_vote_section_description")}</p>
 
           {votingBlockedReason ? <p className="text-base text-default">{votingBlockedReason}</p> : null}
 
@@ -470,6 +481,8 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
               <div className="flex justify-end">
                 <Button
                   type="button"
+                  size="lg"
+                  className="text-lg sm:text-base"
                   loading={isSubmittingVote}
                   disabled={isSubmittingVote}
                   onClick={() => {
@@ -480,7 +493,11 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
               </div>
               {submitFeedback ? (
                 <p
-                  className={submitFeedback.type === "error" ? "text-error text-sm" : "text-sm text-success"}>
+                  className={
+                    submitFeedback.type === "error"
+                      ? "text-base text-error sm:text-sm"
+                      : "text-base text-success sm:text-sm"
+                  }>
                   {submitFeedback.message}
                 </p>
               ) : null}
@@ -489,7 +506,7 @@ export const PublicPollPage = ({ uid, prefilledName = "", prefilledEmail = "" }:
         </div>
 
         {poll.status === "FINALIZED" && finalizedOption ? (
-          <p className="mt-4 text-base text-default">
+          <p className="mt-4 text-default text-lg sm:text-base">
             {t("poll_finalized_slot", {
               slot: `${formatDateTime(finalizedOption.startTime)} - ${formatDateTime(finalizedOption.endTime)}`,
               interpolation: {
