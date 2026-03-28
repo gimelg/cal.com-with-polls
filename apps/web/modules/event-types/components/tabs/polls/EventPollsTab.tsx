@@ -657,7 +657,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
           const finalizedOption = poll.finalizedOptionId
             ? (poll.options.find((option) => option.id === poll.finalizedOptionId) ?? null)
             : null;
-          const participantsById = new Map(poll.participants.map((participant) => [participant.id, participant]));
+          const participantsById = new Map(
+            poll.participants.map((participant) => [participant.id, participant])
+          );
 
           return (
             <div key={poll.id} className="min-w-0 overflow-hidden rounded-lg border border-subtle p-6">
@@ -668,7 +670,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                     <Badge variant={getPollStatusVariant(poll.status)}>
                       {t(`poll_status_${poll.status.toLowerCase()}`)}
                     </Badge>
-                    <Badge variant="gray">{t(`poll_finalization_${poll.finalizationMode.toLowerCase()}`)}</Badge>
+                    <Badge variant="gray">
+                      {t(`poll_finalization_${poll.finalizationMode.toLowerCase()}`)}
+                    </Badge>
                     <Badge variant="gray">{t(`poll_visibility_${poll.visibility.toLowerCase()}`)}</Badge>
                     {poll.isAnonymous ? <Badge variant="gray">{t("poll_anonymous_badge")}</Badge> : null}
                     <Badge variant="gray">
@@ -679,7 +683,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                       )}
                     </Badge>
                   </div>
-                  <p className="mt-2 text-muted text-sm">
+                  <p className="mt-2 text-base text-muted sm:text-sm">
                     {t("poll_response_count", {
                       participants: poll.participants.length,
                       votes: poll.votes.length,
@@ -695,7 +699,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                         StartIcon="lock"
                         loading={closePollMutation.isPending}
                         disabled={
-                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                          closePollMutation.isPending ||
+                          reopenPollMutation.isPending ||
+                          cancelPollMutation.isPending
                         }
                         onClick={() => closePollMutation.mutate({ pollId: poll.id })}>
                         {t("close_poll")}
@@ -704,7 +710,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                         type="button"
                         color="minimal"
                         disabled={
-                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                          closePollMutation.isPending ||
+                          reopenPollMutation.isPending ||
+                          cancelPollMutation.isPending
                         }
                         onClick={() =>
                           setCancelPollTarget({
@@ -723,7 +731,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                         type="button"
                         color="secondary"
                         disabled={
-                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                          closePollMutation.isPending ||
+                          reopenPollMutation.isPending ||
+                          cancelPollMutation.isPending
                         }
                         loading={reopenPollMutation.isPending}
                         onClick={() => reopenPollMutation.mutate({ pollId: poll.id })}>
@@ -733,7 +743,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                         type="button"
                         color="minimal"
                         disabled={
-                          closePollMutation.isPending || reopenPollMutation.isPending || cancelPollMutation.isPending
+                          closePollMutation.isPending ||
+                          reopenPollMutation.isPending ||
+                          cancelPollMutation.isPending
                         }
                         onClick={() =>
                           setCancelPollTarget({
@@ -794,10 +806,11 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                           <p className="font-medium text-base text-default">
                             {t("poll_option_number", { number: index + 1 })}
                           </p>
-                          <p className="text-muted text-sm">
-                            {new Date(option.startTime).toLocaleString()} - {new Date(option.endTime).toLocaleString()}
+                          <p className="text-base text-muted sm:text-sm">
+                            {new Date(option.startTime).toLocaleString()} -{" "}
+                            {new Date(option.endTime).toLocaleString()}
                           </p>
-                          <p className="text-muted text-sm">
+                          <p className="text-base text-muted sm:text-sm">
                             {t("poll_option_vote_breakdown", {
                               yes: voteCounts.yes,
                               ifNeeded: voteCounts.ifNeeded,
@@ -852,7 +865,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                               ))}
                             </div>
                           ) : (
-                            <p className="text-muted text-sm">{t("poll_no_option_responses_yet")}</p>
+                            <p className="text-base text-muted sm:text-sm">
+                              {t("poll_no_option_responses_yet")}
+                            </p>
                           )}
                         </div>
                       ) : null}
@@ -866,11 +881,15 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   <div className="mb-2 flex items-center justify-between">
                     <h5 className="font-semibold text-base text-default">{t("poll_invited_participants")}</h5>
                   </div>
-                  <p className="mb-3 text-muted text-sm">{t("poll_invited_participants_edit_hint")}</p>
+                  <p className="mb-3 text-base text-muted sm:text-sm">
+                    {t("poll_invited_participants_edit_hint")}
+                  </p>
 
                   {poll.status === "OPEN" ? (
                     <div className="mb-4 rounded-md border border-subtle bg-subtle p-3">
-                      <p className="mb-2 font-medium text-default text-sm">{t("poll_add_participant_after_creation")}</p>
+                      <p className="mb-2 font-medium text-base text-default sm:text-sm">
+                        {t("poll_add_participant_after_creation")}
+                      </p>
                       <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
                         <TextField
                           label={t("name")}
@@ -974,7 +993,10 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                                 type="button"
                                 color="minimal"
                                 loading={resendParticipantInviteMutation.isPending}
-                                disabled={updateParticipantMutation.isPending || resendParticipantInviteMutation.isPending}
+                                disabled={
+                                  updateParticipantMutation.isPending ||
+                                  resendParticipantInviteMutation.isPending
+                                }
                                 onClick={() =>
                                   requestResendParticipantInvite({
                                     pollId: poll.id,
@@ -992,7 +1014,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                       })}
                     </div>
                   ) : (
-                    <p className="text-muted text-sm">{t("poll_no_participants_yet")}</p>
+                    <p className="text-base text-muted sm:text-sm">{t("poll_no_participants_yet")}</p>
                   )}
                 </div>
               ) : null}
@@ -1011,9 +1033,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
               ) : null}
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <p className="text-muted text-sm">{t("poll_uid_hint", { uid: poll.uid })}</p>
+                <p className="text-base text-muted sm:text-sm">{t("poll_uid_hint", { uid: poll.uid })}</p>
                 <a
-                  className="text-blue-600 text-sm hover:underline"
+                  className="text-base text-blue-600 hover:underline sm:text-sm"
                   href={getPollPublicPath(poll.uid)}
                   target="_blank"
                   rel="noreferrer">
@@ -1045,7 +1067,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
   }
 
   return (
-    <div className="stack-y-6 min-w-0">
+    <div className="stack-y-6 min-w-0 [&_button]:text-base sm:[&_button]:text-sm">
       <div className="rounded-lg border border-subtle p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1093,7 +1115,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block font-medium text-base text-default">{t("poll_visibility")}</label>
+                <label className="mb-1 block font-medium text-base text-default">
+                  {t("poll_visibility")}
+                </label>
                 <select
                   className="h-10 w-full rounded-[10px] border border-default bg-default px-3 text-base text-default"
                   value={visibility}
@@ -1117,7 +1141,9 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   onChange={(event) => setIsAnonymous(event.target.checked)}
                   description={t("poll_anonymous_responses")}
                 />
-                <p className="mt-1 ml-7 text-muted text-sm">{t("poll_anonymous_responses_hint")}</p>
+                <p className="mt-1 ml-7 text-base text-muted sm:text-sm">
+                  {t("poll_anonymous_responses_hint")}
+                </p>
               </div>
             ) : null}
 
@@ -1127,7 +1153,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
             />
-            <p className="-mt-2 text-muted text-sm">{t("poll_expires_at_hint")}</p>
+            <p className="-mt-2 text-base text-muted sm:text-sm">{t("poll_expires_at_hint")}</p>
 
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -1136,7 +1162,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   {t("add_poll_option")}
                 </Button>
               </div>
-              <p className="mb-3 text-muted text-sm">
+              <p className="mb-3 text-base text-muted sm:text-sm">
                 {t("poll_option_duration_hint", { minutes: eventLengthMinutes })}
               </p>
               <div className="stack-y-3">
@@ -1208,9 +1234,11 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
                   {t("add_participant")}
                 </Button>
               </div>
-              <p className="mb-3 text-muted text-sm">{t("poll_participants_hint")}</p>
+              <p className="mb-3 text-base text-muted sm:text-sm">{t("poll_participants_hint")}</p>
               {participantIdentityMode === "NAME_ONLY" ? (
-                <p className="mb-3 text-muted text-sm">{t("poll_participant_identity_name_only_hint")}</p>
+                <p className="mb-3 text-base text-muted sm:text-sm">
+                  {t("poll_participant_identity_name_only_hint")}
+                </p>
               ) : null}
               <div className="stack-y-3">
                 {participantDrafts.map((participant) => (
@@ -1303,7 +1331,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
             event.preventDefault();
             confirmResendParticipantInvite();
           }}>
-          <p className="mt-2 text-sm">
+          <p className="mt-2 text-base sm:text-sm">
             {resendInviteTarget
               ? t("poll_resend_invite_confirmation_message", {
                   name: resendInviteTarget.participantName,
@@ -1330,7 +1358,7 @@ export const EventPollsTab = ({ eventType }: EventPollsTabProps) => {
             event.preventDefault();
             confirmCancelPoll();
           }}>
-          <p className="mt-2 text-sm">
+          <p className="mt-2 text-base sm:text-sm">
             {cancelPollTarget
               ? t("poll_cancel_confirmation_message", {
                   title: cancelPollTarget.pollTitle,
