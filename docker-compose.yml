@@ -34,55 +34,13 @@ services:
     networks:
       - stack
 
-  calcom-migrate:
-    container_name: calcom-migrate
-    image: ghcr.io/gimelg/calcom-custom:polls-v2-init
-    restart: "no"
-    depends_on:
-      - database
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_DIRECT_URL: ${DATABASE_URL}
-    command:
-      - sh
-      - -c
-      - scripts/wait-for-it.sh ${DATABASE_HOST} -- npx prisma migrate deploy --schema /calcom/packages/prisma/schema.prisma
-    networks:
-      - stack
-
-  calcom-seed:
-    container_name: calcom-seed
-    image: ghcr.io/gimelg/calcom-custom:polls-v2-init
-    restart: "no"
-    profiles:
-      - seed
-    depends_on:
-      calcom-migrate:
-        condition: service_completed_successfully
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_DIRECT_URL: ${DATABASE_URL}
-    command:
-      - npx
-      - ts-node
-      - --transpile-only
-      - /calcom/scripts/seed-app-store.ts
-    networks:
-      - stack
-
   calcom:
     container_name: calcom
     image: ghcr.io/gimelg/calcom-custom:polls-v2
     restart: unless-stopped
     depends_on:
-      calcom-migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_started
+      - database
+      - redis
     env_file:
       - .env
     environment:
