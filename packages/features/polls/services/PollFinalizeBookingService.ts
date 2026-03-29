@@ -11,8 +11,8 @@ import { ErrorWithCode } from "@calcom/lib/errors";
 import { prisma } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
-import { isPollAliasEmail } from "../lib/poll-types";
 import type { PollVoteType } from "../lib/poll-types";
+import { isPollAliasEmail } from "../lib/poll-types";
 import { PollRepository } from "../repositories/PollRepository";
 
 type FinalizePollInput = {
@@ -47,6 +47,7 @@ type PollFinalizeBookingServiceDeps = {
   }) => Promise<{ id: number } | null>;
   findBookingByUid?: (uid: string) => Promise<{ id: number } | null>;
   isIdempotencyConflictError?: (error: unknown) => boolean;
+  isBookingConflictError?: (error: unknown) => boolean;
 };
 
 const YES_OR_IF_NEEDED: PollVoteType[] = ["YES", "IF_NEEDED"];
@@ -85,6 +86,55 @@ function defaultIsIdempotencyConflictError(error: unknown): boolean {
   return false;
 }
 
+function defaultIsBookingConflictError(error: unknown): boolean {
+  const queue: unknown[] = [error];
+  const visited = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (!candidate || typeof candidate !== "object" || visited.has(candidate)) {
+      continue;
+    }
+
+    visited.add(candidate);
+
+    if (candidate instanceof ErrorWithCode && candidate.code === ErrorCode.BookingConflict) {
+      return true;
+    }
+
+    const candidateError = candidate as {
+      code?: unknown;
+      message?: unknown;
+      statusCode?: unknown;
+      cause?: unknown;
+    };
+
+    if (
+      candidateError.code === ErrorCode.BookingConflict ||
+      candidateError.message === ErrorCode.BookingConflict
+    ) {
+      return true;
+    }
+
+    if (candidateError.statusCode === 409 && candidateError.message === ErrorCode.BookingConflict) {
+      return true;
+    }
+
+    if (
+      candidateError.statusCode === 400 &&
+      candidateError.message === "An error occurred while querying the database."
+    ) {
+      return true;
+    }
+
+    if (candidateError.cause) {
+      queue.push(candidateError.cause);
+    }
+  }
+
+  return false;
+}
+
 export class PollFinalizeBookingService {
   private readonly pollRepository: PollRepository;
   private readonly createRegularBooking: NonNullable<PollFinalizeBookingServiceDeps["createRegularBooking"]>;
@@ -97,6 +147,9 @@ export class PollFinalizeBookingService {
   private readonly findBookingByUid: NonNullable<PollFinalizeBookingServiceDeps["findBookingByUid"]>;
   private readonly isIdempotencyConflictError: NonNullable<
     PollFinalizeBookingServiceDeps["isIdempotencyConflictError"]
+  >;
+  private readonly isBookingConflictError: NonNullable<
+    PollFinalizeBookingServiceDeps["isBookingConflictError"]
   >;
 
   constructor(deps?: PollFinalizeBookingServiceDeps) {
@@ -123,13 +176,13 @@ export class PollFinalizeBookingService {
       });
     this.findBookingByPollMetadata =
       deps?.findBookingByPollMetadata ??
-      (async (
-        {
-          pollId,
-          pollOptionId,
-          organizerId,
-        }: Parameters<NonNullable<PollFinalizeBookingServiceDeps["findBookingByPollMetadata"]>>[0]
-      ): Promise<{ id: number } | null> => {
+      (async ({
+        pollId,
+        pollOptionId,
+        organizerId,
+      }: Parameters<NonNullable<PollFinalizeBookingServiceDeps["findBookingByPollMetadata"]>>[0]): Promise<{
+        id: number;
+      } | null> => {
         return await prisma.booking.findFirst({
           where: {
             userId: organizerId,
@@ -167,6 +220,7 @@ export class PollFinalizeBookingService {
         });
       });
     this.isIdempotencyConflictError = deps?.isIdempotencyConflictError ?? defaultIsIdempotencyConflictError;
+    this.isBookingConflictError = deps?.isBookingConflictError ?? defaultIsBookingConflictError;
   }
 
   async createBookingForFinalizedPoll(input: FinalizePollInput): Promise<FinalizePollOutput> {
@@ -260,55 +314,93 @@ export class PollFinalizeBookingService {
 
       return { bookingId: null };
     } catch (error) {
-      const isIdempotencyConflict = this.isIdempotencyConflictError(error);
-
-      console.warn("[polls] Booking creation failed during poll finalization", {
+      return await this.handleBookingCreationError({
+        error,
         pollId: poll.id,
         pollOptionId: pollOption.id,
         organizerId: poll.organizerId,
-        isIdempotencyConflict,
+        idempotencyKey,
       });
-
-      const existingBooking = await this.findBookingByIdempotencyKey(idempotencyKey);
-      if (existingBooking) {
-        console.info("[polls] Reused existing booking after booking creation failure (idempotencyKey lookup)", {
-          pollId: poll.id,
-          pollOptionId: pollOption.id,
-          bookingId: existingBooking.id,
-          isIdempotencyConflict,
-        });
-
-        return {
-          bookingId: existingBooking.id,
-        };
-      }
-
-      const existingBookingByMetadata = await this.findBookingByPollMetadata({
-        pollId: poll.id,
-        pollOptionId: pollOption.id,
-        organizerId: poll.organizerId,
-      });
-      if (existingBookingByMetadata) {
-        console.info("[polls] Reused existing booking after booking creation failure (metadata lookup)", {
-          pollId: poll.id,
-          pollOptionId: pollOption.id,
-          bookingId: existingBookingByMetadata.id,
-          isIdempotencyConflict,
-        });
-
-        return {
-          bookingId: existingBookingByMetadata.id,
-        };
-      }
-
-      console.error("[polls] Unable to recover booking after booking creation failure", {
-        pollId: poll.id,
-        pollOptionId: pollOption.id,
-        isIdempotencyConflict,
-      });
-
-      throw error;
     }
+  }
+
+  private async handleBookingCreationError({
+    error,
+    pollId,
+    pollOptionId,
+    organizerId,
+    idempotencyKey,
+  }: {
+    error: unknown;
+    pollId: number;
+    pollOptionId: number;
+    organizerId: number;
+    idempotencyKey: string;
+  }): Promise<FinalizePollOutput> {
+    const isIdempotencyConflict = this.isIdempotencyConflictError(error);
+    const isBookingConflict = this.isBookingConflictError(error);
+
+    console.warn("[polls] Booking creation failed during poll finalization", {
+      pollId,
+      pollOptionId,
+      organizerId,
+      isIdempotencyConflict,
+      isBookingConflict,
+    });
+
+    const existingBooking = await this.findBookingByIdempotencyKey(idempotencyKey);
+    if (existingBooking) {
+      console.info("[polls] Reused existing booking after booking creation failure (idempotencyKey lookup)", {
+        pollId,
+        pollOptionId,
+        bookingId: existingBooking.id,
+        isIdempotencyConflict,
+      });
+
+      return {
+        bookingId: existingBooking.id,
+      };
+    }
+
+    const existingBookingByMetadata = await this.findBookingByPollMetadata({
+      pollId,
+      pollOptionId,
+      organizerId,
+    });
+    if (existingBookingByMetadata) {
+      console.info("[polls] Reused existing booking after booking creation failure (metadata lookup)", {
+        pollId,
+        pollOptionId,
+        bookingId: existingBookingByMetadata.id,
+        isIdempotencyConflict,
+      });
+
+      return {
+        bookingId: existingBookingByMetadata.id,
+      };
+    }
+
+    if (isBookingConflict) {
+      console.warn("[polls] Poll finalization blocked by booking conflict", {
+        pollId,
+        pollOptionId,
+        organizerId,
+      });
+
+      throw new ErrorWithCode(
+        ErrorCode.BookingConflict,
+        "Cannot finalize poll because the selected option conflicts with an existing booking. Choose a different option."
+      );
+    }
+
+    console.error("[polls] Unable to recover booking after booking creation failure", {
+      pollId,
+      pollOptionId,
+      isIdempotencyConflict,
+      isBookingConflict,
+    });
+
+    throw error;
   }
 
   private resolveLocationValue(rawLocations: unknown): string {
