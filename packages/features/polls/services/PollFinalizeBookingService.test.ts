@@ -11,6 +11,7 @@ function buildPollContext(overrides?: Partial<PollFinalizeContext>): PollFinaliz
     id: 1,
     uid: "poll_1",
     title: "Planning Poll",
+    visibility: "INVITE_ONLY",
     eventTypeId: 100,
     organizerId: 200,
     timeZone: "UTC",
@@ -98,8 +99,37 @@ describe("PollFinalizeBookingService", () => {
           noEmail: false,
           responses: expect.objectContaining({
             email: "alice@example.com",
-            name: "Poll participants",
+            name: "Alice, Bob",
             guests: ["bob@example.com"],
+          }),
+        }),
+      })
+    );
+  });
+
+  it("uses a generic participant label for public polls", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext({ visibility: "PUBLIC" })),
+    };
+    const createRegularBooking = vi.fn().mockResolvedValue({ id: 45 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey: vi.fn(),
+      findBookingByUid: vi.fn(),
+    });
+
+    await service.createBookingForFinalizedPoll({
+      pollId: 1,
+      pollOptionId: 11,
+    });
+
+    expect(createRegularBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingData: expect.objectContaining({
+          responses: expect.objectContaining({
+            name: "Poll participants",
           }),
         }),
       })

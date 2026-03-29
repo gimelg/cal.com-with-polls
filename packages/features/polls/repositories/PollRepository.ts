@@ -52,6 +52,7 @@ const pollFinalizeContextSelect = {
   id: true,
   uid: true,
   title: true,
+  visibility: true,
   eventTypeId: true,
   organizerId: true,
   timeZone: true,

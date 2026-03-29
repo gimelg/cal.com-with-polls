@@ -6,6 +6,7 @@ export const AttendeeCancelledEmail = (props: React.ComponentProps<typeof Attend
     headerType="xCircle"
     subject="event_cancelled_subject"
     callToAction={null}
+    showPollWhoInfo
     {...props}
   />
 );

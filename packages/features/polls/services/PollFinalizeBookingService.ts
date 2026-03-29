@@ -257,10 +257,18 @@ export class PollFinalizeBookingService {
     const shouldSuppressBookingEmails = participants.every((participant) =>
       isPollAliasEmail(participant.email)
     );
+    const inviteOnlyParticipantNames = participants
+      .map((participant) => participant.name.trim())
+      .filter((name) => name.length > 0);
+
+    const pollParticipantDisplayName =
+      poll.visibility === "INVITE_ONLY" && inviteOnlyParticipantNames.length > 0
+        ? inviteOnlyParticipantNames.join(", ")
+        : POLL_ATTENDEE_NAME;
 
     const responses: Record<string, unknown> = {
       email: primaryParticipant.email,
-      name: POLL_ATTENDEE_NAME,
+      name: pollParticipantDisplayName,
       guests: guestParticipants.map((participant) => participant.email),
     };
 
