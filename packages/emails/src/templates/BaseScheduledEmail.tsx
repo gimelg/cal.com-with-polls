@@ -26,10 +26,12 @@ export const BaseScheduledEmail = (
     timeFormat: TimeFormat | undefined;
     isOrganizer?: boolean;
     reassigned?: { name: string | null; email: string; reason?: string; byUser?: string };
+    showPollWhoInfo?: boolean;
   } & Partial<React.ComponentProps<typeof BaseEmailHtml>>
 ): JSX.Element => {
   const { t, timeZone, locale, timeFormat: timeFormat_ } = props;
   const isPollBooking = typeof props.calEvent.pollUid === "string";
+  const showPollWhoInfo = Boolean(isPollBooking && props.showPollWhoInfo);
 
   const timeFormat = timeFormat_ ?? TimeFormat.TWELVE_HOUR;
 
@@ -94,7 +96,7 @@ export const BaseScheduledEmail = (
     paymentLabel = t("no_show_fee");
   }
 
-  const showWhoInfo = !isPollBooking;
+  const showWhoInfo = !isPollBooking || showPollWhoInfo;
 
   return (
     <BaseEmailHtml
@@ -141,7 +143,9 @@ export const BaseScheduledEmail = (
       {rescheduledBy && <Info label={t("rescheduled_by")} description={rescheduledBy} withSpacer />}
       <Info label={t("what")} description={props.calEvent.title} withSpacer />
       <WhenInfo timeFormat={timeFormat} calEvent={props.calEvent} t={t} timeZone={timeZone} locale={locale} />
-      {showWhoInfo && <WhoInfo calEvent={props.calEvent} t={t} />}
+      {showWhoInfo && (
+        <WhoInfo calEvent={props.calEvent} t={t} showPollParticipantSummary={showPollWhoInfo} />
+      )}
       <LocationInfo calEvent={props.calEvent} t={t} />
       <Info label={t("description")} description={props.calEvent.description} withSpacer formatted />
       <Info label={t("additional_notes")} description={props.calEvent.additionalNotes} withSpacer formatted />
@@ -149,7 +153,9 @@ export const BaseScheduledEmail = (
       {props.isOrganizer && props.calEvent.assignmentReason && (
         <Info label={t("assignment_reason")} description={assignmentReasonDescription} withSpacer />
       )}
-      <UserFieldsResponses t={t} calEvent={props.calEvent} isOrganizer={props.isOrganizer} />
+      {!isPollBooking && (
+        <UserFieldsResponses t={t} calEvent={props.calEvent} isOrganizer={props.isOrganizer} />
+      )}
       {props.calEvent.paymentInfo?.amount && (
         <Info
           label={paymentLabel}
