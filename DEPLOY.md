@@ -14,19 +14,30 @@ git add .
 git commit -m "chore: bump deploy version"
 git push
 
-# pick a new tag every time
-export TAG=polls-v5
-
-docker buildx build --platform linux/amd64 --no-cache --pull \
+# Use this as your new default command:
+export TAG=polls-v6
+export CACHE_REF=ghcr.io/gimelg/calcom-custom:buildcache-polls-v1
+docker buildx build --platform linux/amd64 \
+  --cache-from type=registry,ref=$CACHE_REF \
+  --cache-to type=registry,ref=$CACHE_REF,mode=max \
   -t ghcr.io/gimelg/calcom-custom:$TAG \
   --push .
-```
+# Then keep a separate “clean” command for occasional use:
+docker buildx build --platform linux/amd64 --pull --no-cache \
+  -t ghcr.io/gimelg/calcom-custom:$TAG \
+  --push .
 
-Optional sanity check:
+# pick a new tag every time
+#export TAG=polls-v5
 
-```bash
-docker run --rm --platform linux/amd64 ghcr.io/gimelg/calcom-custom:$TAG yarn -v
-```
+#docker buildx build --platform linux/amd64 --no-cache --pull \
+#  -t ghcr.io/gimelg/calcom-custom:$TAG \
+#  --push .
+#```
+#Optional sanity check:
+#```bash
+#docker run --rm --platform linux/amd64 ghcr.io/gimelg/calcom-custom:$TAG yarn -v
+#```
 
 ## 2) Deploy on VPS
 

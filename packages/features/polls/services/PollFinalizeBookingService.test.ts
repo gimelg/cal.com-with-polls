@@ -1,3 +1,4 @@
+import { ErrorCode } from "@calcom/lib/errorCodes";
 import { describe, expect, it, vi } from "vitest";
 import type { PollFinalizeContext, PollRepository } from "../repositories/PollRepository";
 import { PollFinalizeBookingService } from "./PollFinalizeBookingService";
@@ -241,8 +242,7 @@ describe("PollFinalizeBookingService", () => {
         driverAdapterError: {
           cause: {
             originalCode: "23505",
-            originalMessage:
-              'duplicate key value violates unique constraint "Booking_idempotencyKey_key"',
+            originalMessage: 'duplicate key value violates unique constraint "Booking_idempotencyKey_key"',
           },
         },
       },
@@ -270,6 +270,66 @@ describe("PollFinalizeBookingService", () => {
       pollId: 1,
       pollOptionId: 11,
       organizerId: 200,
+    });
+  });
+
+  it("throws a booking conflict error when selected slot is already booked", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+
+    const createRegularBooking = vi.fn().mockRejectedValue({
+      statusCode: 409,
+      message: ErrorCode.BookingConflict,
+    });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      findBookingByPollMetadata: vi.fn().mockResolvedValue(null),
+      findBookingByUid: vi.fn(),
+    });
+
+    await expect(
+      service.createBookingForFinalizedPoll({
+        pollId: 1,
+        pollOptionId: 11,
+      })
+    ).rejects.toMatchObject({
+      code: ErrorCode.BookingConflict,
+      message:
+        "Cannot finalize poll because the selected option conflicts with an existing booking. Choose a different option.",
+    });
+  });
+
+  it("maps redacted booking save errors to booking conflict when recovery misses", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+
+    const createRegularBooking = vi.fn().mockRejectedValue({
+      statusCode: 400,
+      message: "An error occurred while querying the database.",
+    });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      findBookingByPollMetadata: vi.fn().mockResolvedValue(null),
+      findBookingByUid: vi.fn(),
+    });
+
+    await expect(
+      service.createBookingForFinalizedPoll({
+        pollId: 1,
+        pollOptionId: 11,
+      })
+    ).rejects.toMatchObject({
+      code: ErrorCode.BookingConflict,
+      message:
+        "Cannot finalize poll because the selected option conflicts with an existing booking. Choose a different option.",
     });
   });
 
