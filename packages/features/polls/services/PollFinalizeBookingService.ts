@@ -10,6 +10,7 @@ import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
 import { prisma } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
+import { CreationSource } from "@calcom/prisma/enums";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
 import type { PollVoteType } from "../lib/poll-types";
 import { isPollAliasEmail } from "../lib/poll-types";
@@ -48,6 +49,7 @@ type PollFinalizeBookingServiceDeps = {
   findBookingByUid?: (uid: string) => Promise<{ id: number } | null>;
   isIdempotencyConflictError?: (error: unknown) => boolean;
   isBookingConflictError?: (error: unknown) => boolean;
+  shouldSkipRecovery?: (error: unknown) => boolean;
 };
 
 const YES_OR_IF_NEEDED: PollVoteType[] = ["YES", "IF_NEEDED"];
@@ -135,6 +137,39 @@ function defaultIsBookingConflictError(error: unknown): boolean {
   return false;
 }
 
+function defaultShouldSkipRecovery(error: unknown): boolean {
+  const queue: unknown[] = [error];
+  const visited = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (!candidate || typeof candidate !== "object" || visited.has(candidate)) {
+      continue;
+    }
+
+    visited.add(candidate);
+
+    const candidateError = candidate as {
+      data?: unknown;
+      cause?: unknown;
+    };
+
+    if (
+      candidateError.data &&
+      typeof candidateError.data === "object" &&
+      (candidateError.data as { skipPollFinalizeRecovery?: unknown }).skipPollFinalizeRecovery === true
+    ) {
+      return true;
+    }
+
+    if (candidateError.cause) {
+      queue.push(candidateError.cause);
+    }
+  }
+
+  return false;
+}
+
 export class PollFinalizeBookingService {
   private readonly pollRepository: PollRepository;
   private readonly createRegularBooking: NonNullable<PollFinalizeBookingServiceDeps["createRegularBooking"]>;
@@ -151,6 +186,7 @@ export class PollFinalizeBookingService {
   private readonly isBookingConflictError: NonNullable<
     PollFinalizeBookingServiceDeps["isBookingConflictError"]
   >;
+  private readonly shouldSkipRecovery: NonNullable<PollFinalizeBookingServiceDeps["shouldSkipRecovery"]>;
 
   constructor(deps?: PollFinalizeBookingServiceDeps) {
     this.pollRepository = deps?.pollRepository ?? PollRepository.create();
@@ -221,6 +257,7 @@ export class PollFinalizeBookingService {
       });
     this.isIdempotencyConflictError = deps?.isIdempotencyConflictError ?? defaultIsIdempotencyConflictError;
     this.isBookingConflictError = deps?.isBookingConflictError ?? defaultIsBookingConflictError;
+    this.shouldSkipRecovery = deps?.shouldSkipRecovery ?? defaultShouldSkipRecovery;
   }
 
   async createBookingForFinalizedPoll(input: FinalizePollInput): Promise<FinalizePollOutput> {
@@ -297,6 +334,7 @@ export class PollFinalizeBookingService {
       responses,
       idempotencyKey,
       noEmail: shouldSuppressBookingEmails,
+      creationSource: CreationSource.WEBAPP,
     };
 
     try {
@@ -345,6 +383,10 @@ export class PollFinalizeBookingService {
     organizerId: number;
     idempotencyKey: string;
   }): Promise<FinalizePollOutput> {
+    if (this.shouldSkipRecovery(error)) {
+      throw error;
+    }
+
     const isIdempotencyConflict = this.isIdempotencyConflictError(error);
     const isBookingConflict = this.isBookingConflictError(error);
 

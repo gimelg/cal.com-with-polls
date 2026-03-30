@@ -69,6 +69,7 @@ import {
   scheduleTrigger,
 } from "@calcom/features/webhooks/lib/scheduleTrigger";
 import type { EventPayloadType, EventTypeInfo } from "@calcom/features/webhooks/lib/sendPayload";
+import { getTranslation } from "@calcom/i18n/server";
 import { groupHostsByGroupId } from "@calcom/lib/bookings/hostGroupUtils";
 import { shouldIgnoreContactOwner } from "@calcom/lib/bookings/routing/utils";
 import { getVideoCallUrlFromCalEvent } from "@calcom/lib/CalEventParser";
@@ -83,7 +84,6 @@ import { criticalLogger } from "@calcom/lib/logger.server";
 import { getPiiFreeCalendarEvent, getPiiFreeEventType } from "@calcom/lib/piiFreeData";
 import { safeStringify } from "@calcom/lib/safeStringify";
 import { getServerErrorFromUnknown } from "@calcom/lib/server/getServerErrorFromUnknown";
-import { getTranslation } from "@calcom/i18n/server";
 import { getTimeFormatStringFromUserTimeFormat } from "@calcom/lib/timeFormat";
 import { distributedTracing } from "@calcom/lib/tracing/factory";
 import type { PrismaClient } from "@calcom/prisma";
@@ -142,6 +142,7 @@ import { validateEventLength } from "../handleNewBooking/validateEventLength";
 import handleSeats from "../handleSeats/handleSeats";
 import type { IBookingService } from "../interfaces/IBookingService";
 import { isWithinMinimumRescheduleNotice } from "../reschedule/isWithinMinimumRescheduleNotice";
+import { getPollFinalizeIntegrationFailure } from "./pollFinalizeIntegrationFailure";
 
 const translator = short();
 
@@ -2270,6 +2271,63 @@ async function handler(
     referencesToCreate = createManager.referencesToCreate;
     videoCallUrl = evt.videoCallData && evt.videoCallData.url ? evt.videoCallData.url : null;
 
+    const pollFinalizeIntegrationFailure = getPollFinalizeIntegrationFailure({
+      metadata: reqBody.metadata,
+      results,
+    });
+    if (pollFinalizeIntegrationFailure) {
+      tracingLogger.error(
+        "Poll finalization blocked due to integration failures",
+        safeStringify({
+          pollId: reqBody.metadata?.pollId,
+          pollOptionId: reqBody.metadata?.pollOptionId,
+          bookingId: booking?.id,
+          failedIntegrations: pollFinalizeIntegrationFailure.failedIntegrations,
+        })
+      );
+
+      if (!isDryRun && booking) {
+        if (referencesToCreate.length > 0) {
+          try {
+            if ("deleteEventsAndMeetings" in eventManager) {
+              await eventManager.deleteEventsAndMeetings({
+                event: evt,
+                bookingReferences: referencesToCreate,
+              });
+            }
+          } catch (cleanupError) {
+            tracingLogger.error(
+              "Failed to clean up created integrations after poll finalization failure",
+              safeStringify(cleanupError)
+            );
+          }
+        }
+
+        try {
+          await deps.prismaClient.booking.update({
+            where: {
+              id: booking.id,
+            },
+            data: {
+              status: BookingStatus.CANCELLED,
+              cancellationReason:
+                "Poll finalization failed because connected integrations could not create the meeting.",
+            },
+          });
+        } catch (cleanupError) {
+          tracingLogger.error(
+            "Failed to cancel booking after poll finalization integration failure",
+            safeStringify(cleanupError)
+          );
+        }
+      }
+
+      throw new ErrorWithCode(ErrorCode.BadRequest, pollFinalizeIntegrationFailure.userMessage, {
+        skipPollFinalizeRecovery: true,
+        failedIntegrations: pollFinalizeIntegrationFailure.failedIntegrations,
+      });
+    }
+
     if (results.length > 0 && results.every((res) => !res.success)) {
       const error = {
         errorCode: "BookingCreatingMeetingFailed",
@@ -2454,7 +2512,7 @@ async function handler(
     isBookingAuditEnabled,
   });
 
-  const webhookLocation= metadata?.videoCallUrl || evt.location;
+  const webhookLocation = metadata?.videoCallUrl || evt.location;
 
   const { assignmentReason: _emailAssignmentReason, ...evtWithoutAssignmentReason } = evt;
   const webhookData: EventPayloadType = {

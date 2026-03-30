@@ -1,4 +1,5 @@
 import { ErrorCode } from "@calcom/lib/errorCodes";
+import { ErrorWithCode } from "@calcom/lib/errors";
 import { describe, expect, it, vi } from "vitest";
 import type { PollFinalizeContext, PollRepository } from "../repositories/PollRepository";
 import { PollFinalizeBookingService } from "./PollFinalizeBookingService";
@@ -92,6 +93,7 @@ describe("PollFinalizeBookingService", () => {
           start: optionStart.toISOString(),
           end: optionEnd.toISOString(),
           idempotencyKey: "poll-finalize:1:11",
+          creationSource: "WEBAPP",
           metadata: expect.objectContaining({
             pollUid: "poll_1",
             pollTitle: "Planning Poll",
@@ -331,6 +333,46 @@ describe("PollFinalizeBookingService", () => {
       message:
         "Cannot finalize poll because the selected option conflicts with an existing booking. Choose a different option.",
     });
+  });
+
+  it("does not recover bookings for non-recoverable poll finalization failures", async () => {
+    const pollRepository = {
+      getPollFinalizeContextById: vi.fn().mockResolvedValue(buildPollContext()),
+    };
+
+    const createRegularBooking = vi
+      .fn()
+      .mockRejectedValue(
+        new ErrorWithCode(
+          ErrorCode.BadRequest,
+          "Could not create Zoom meeting. Reconnect Zoom and try again.",
+          { skipPollFinalizeRecovery: true }
+        )
+      );
+
+    const findBookingByIdempotencyKey = vi.fn().mockResolvedValue({ id: 201 });
+    const findBookingByPollMetadata = vi.fn().mockResolvedValue({ id: 202 });
+
+    const service = new PollFinalizeBookingService({
+      pollRepository: pollRepository as unknown as PollRepository,
+      createRegularBooking,
+      findBookingByIdempotencyKey,
+      findBookingByPollMetadata,
+      findBookingByUid: vi.fn(),
+    });
+
+    await expect(
+      service.createBookingForFinalizedPoll({
+        pollId: 1,
+        pollOptionId: 11,
+      })
+    ).rejects.toMatchObject({
+      code: ErrorCode.BadRequest,
+      message: "Could not create Zoom meeting. Reconnect Zoom and try again.",
+    });
+
+    expect(findBookingByIdempotencyKey).not.toHaveBeenCalled();
+    expect(findBookingByPollMetadata).not.toHaveBeenCalled();
   });
 
   it("maps redacted booking save errors to booking conflict when recovery misses", async () => {
