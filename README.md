@@ -54,6 +54,15 @@ Cal.diy is **100% MIT-licensed** with no proprietary "Enterprise Edition" featur
 
 > **Note:** Cal.diy is a self-hosted project. There is no hosted/managed version. You run it on your own infrastructure.
 
+## Fork notes
+
+This fork includes two major scheduling features built on top of Cal.com:
+
+- **Scheduling polls**: organizers can propose multiple time slots, collect participant availability, and finalize the winning slot into a booking.
+- **Specific meetings**: organizers can invite a defined set of people to a meeting flow with RSVP, participant coordination, and booking creation tied to the invited group.
+
+These features are custom to this fork and are intended to be preserved while syncing the codebase with upstream Cal.com.
+
 ### Built With
 
 - [Next.js](https://nextjs.org/)

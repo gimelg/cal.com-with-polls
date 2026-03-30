@@ -1,6 +1,24 @@
-FROM --platform=$TARGETPLATFORM node:20 AS builder
+FROM --platform=$TARGETPLATFORM node:20 AS base
 WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
+
+FROM base AS pruner
+COPY package.json yarn.lock .yarnrc.yml playwright.config.ts turbo.json i18n.json ./
+COPY .yarn ./.yarn
+COPY apps ./apps
+COPY packages ./packages
+RUN npx turbo prune --scope=@calcom/web --scope=@calcom/trpc --docker
+
+FROM base AS deps
+COPY --from=pruner /calcom/out/json/ ./
+COPY --from=pruner /calcom/out/yarn.lock ./yarn.lock
+COPY .yarnrc.yml ./.yarnrc.yml
+COPY .yarn ./.yarn
+RUN yarn config set httpTimeout 1200000
+ENV YARN_ENABLE_SCRIPTS=false
+RUN yarn install --immutable
+
+FROM base AS builder
 ## If we want to read any ENV variable from .env file, we need to first accept and pass it as an argument to the Dockerfile
 ARG NEXT_PUBLIC_LICENSE_CONSENT
 ARG NEXT_PUBLIC_WEBSITE_TERMS_URL
@@ -30,14 +48,11 @@ ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
   NODE_OPTIONS=--max-old-space-size=${MAX_OLD_SPACE_SIZE} \
   BUILD_STANDALONE=true \
   CSP_POLICY=$CSP_POLICY
-COPY package.json yarn.lock .yarnrc.yml playwright.config.ts turbo.json i18n.json ./
-COPY .yarn ./.yarn
-COPY apps/web ./apps/web
-COPY apps/api/v2 ./apps/api/v2
-COPY packages ./packages
+COPY --from=pruner /calcom/out/full/ ./
+COPY --from=deps /calcom/node_modules ./node_modules
+COPY --from=deps /calcom/yarn.lock ./yarn.lock
 RUN yarn config set httpTimeout 1200000
-RUN npx turbo prune --scope=@calcom/web --scope=@calcom/trpc --docker
-RUN yarn install
+RUN yarn install --immutable
 # Build and make embed servable from web/public/embed folder
 RUN yarn workspace @calcom/trpc run build
 RUN yarn --cwd packages/embeds/embed-core workspace @calcom/embed-core run build
@@ -49,13 +64,7 @@ WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NODE_ENV=production
-COPY package.json .yarnrc.yml turbo.json i18n.json ./
-COPY .yarn ./.yarn
-COPY --from=builder /calcom/yarn.lock ./yarn.lock
-COPY --from=builder /calcom/node_modules ./node_modules
-COPY --from=builder /calcom/packages ./packages
-COPY --from=builder /calcom/apps/web ./apps/web
-COPY --from=builder /calcom/packages/prisma/schema.prisma ./prisma/schema.prisma
+COPY --from=builder /calcom ./
 COPY scripts scripts
 RUN chmod +x scripts/*
 # Save value used during this build stage. If NEXT_PUBLIC_WEBAPP_URL and BUILT_NEXT_PUBLIC_WEBAPP_URL differ at
