@@ -56,6 +56,10 @@ Calendly and other scheduling tools are awesome. It made our lives massively eas
 
 That's where Cal.com comes in. Self-hosted or hosted by us. White-label by design. API-driven and ready to be deployed on your own domain. Full control of your events and data.
 
+## Fork notes
+
+This fork includes an implemented scheduling poll feature that lets organizers collect participant availability and finalize a winning slot into a booking.
+
 ## Recognition
 
 #### [Hacker News](https://news.ycombinator.com/from?site=cal.com)
