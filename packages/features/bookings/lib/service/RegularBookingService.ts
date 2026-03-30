@@ -113,6 +113,7 @@ import type { IBookingService } from "../interfaces/IBookingService";
 import type { BookingEventHandlerService } from "../onBookingEvents/BookingEventHandlerService";
 import type { BookingRescheduledPayload } from "../onBookingEvents/types";
 import { isWithinMinimumRescheduleNotice } from "../reschedule/isWithinMinimumRescheduleNotice";
+import { getPollFinalizeIntegrationFailure } from "./pollFinalizeIntegrationFailure";
 
 const translator = short();
 
@@ -2061,6 +2062,63 @@ async function handler(
     results = createManager.results;
     referencesToCreate = createManager.referencesToCreate;
     videoCallUrl = evt.videoCallData?.url ? evt.videoCallData.url : null;
+
+    const pollFinalizeIntegrationFailure = getPollFinalizeIntegrationFailure({
+      metadata: reqBody.metadata,
+      results,
+    });
+    if (pollFinalizeIntegrationFailure) {
+      tracingLogger.error(
+        "Poll finalization blocked due to integration failures",
+        safeStringify({
+          pollId: reqBody.metadata?.pollId,
+          pollOptionId: reqBody.metadata?.pollOptionId,
+          bookingId: booking?.id,
+          failedIntegrations: pollFinalizeIntegrationFailure.failedIntegrations,
+        })
+      );
+
+      if (!isDryRun && booking) {
+        if (referencesToCreate.length > 0) {
+          try {
+            if ("deleteEventsAndMeetings" in eventManager) {
+              await eventManager.deleteEventsAndMeetings({
+                event: evt,
+                bookingReferences: referencesToCreate,
+              });
+            }
+          } catch (cleanupError) {
+            tracingLogger.error(
+              "Failed to clean up created integrations after poll finalization failure",
+              safeStringify(cleanupError)
+            );
+          }
+        }
+
+        try {
+          await deps.prismaClient.booking.update({
+            where: {
+              id: booking.id,
+            },
+            data: {
+              status: BookingStatus.CANCELLED,
+              cancellationReason:
+                "Poll finalization failed because connected integrations could not create the meeting.",
+            },
+          });
+        } catch (cleanupError) {
+          tracingLogger.error(
+            "Failed to cancel booking after poll finalization integration failure",
+            safeStringify(cleanupError)
+          );
+        }
+      }
+
+      throw new ErrorWithCode(ErrorCode.BadRequest, pollFinalizeIntegrationFailure.userMessage, {
+        skipPollFinalizeRecovery: true,
+        failedIntegrations: pollFinalizeIntegrationFailure.failedIntegrations,
+      });
+    }
 
     if (results.length > 0 && results.every((res) => !res.success)) {
       const error = {
