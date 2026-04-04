@@ -2,21 +2,22 @@ FROM --platform=$TARGETPLATFORM node:20 AS base
 WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 
-FROM base AS pruner
+FROM base AS manifests
 COPY package.json yarn.lock .yarnrc.yml playwright.config.ts turbo.json i18n.json ./
 COPY .yarn ./.yarn
 COPY apps ./apps
 COPY packages ./packages
-RUN npx turbo prune --scope=@calcom/web --scope=@calcom/trpc --docker
+COPY example-apps ./example-apps
+RUN node -e "const fs=require('fs');const path=require('path');const root='/calcom';const out='/calcom/manifests';const copy=(rel)=>{const src=path.join(root,rel);if(!fs.existsSync(src)) return;const dst=path.join(out,rel);fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);};const walk=(dir)=>{if(!fs.existsSync(dir)) return;for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const abs=path.join(dir,entry.name);if(entry.isDirectory()){walk(abs);continue;}if(entry.name==='package.json'){const rel=path.relative(root,abs);copy(rel);}}};for(const file of ['package.json','yarn.lock','.yarnrc.yml','playwright.config.ts','turbo.json','i18n.json']) copy(file);walk(path.join(root,'apps'));walk(path.join(root,'packages'));walk(path.join(root,'example-apps'));"
 
 FROM base AS deps
-COPY --from=pruner /calcom/out/json/ ./
-COPY --from=pruner /calcom/out/yarn.lock ./yarn.lock
-COPY .yarnrc.yml ./.yarnrc.yml
+COPY --from=manifests /calcom/manifests/ ./
 COPY .yarn ./.yarn
 RUN yarn config set httpTimeout 1200000
-ENV YARN_ENABLE_SCRIPTS=false
-RUN yarn install --immutable
+RUN node -e "const fs=require('fs');const p='./package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));if(j.scripts){delete j.scripts.postinstall;}fs.writeFileSync(p,JSON.stringify(j,null,2)+'\\n');"
+RUN --mount=type=cache,id=calcom-yarn-unplugged,target=/calcom/.yarn/unplugged \
+  --mount=type=cache,id=calcom-node-gyp,target=/root/.cache/node-gyp \
+  yarn install
 
 FROM base AS builder
 ## If we want to read any ENV variable from .env file, we need to first accept and pass it as an argument to the Dockerfile
@@ -48,23 +49,32 @@ ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
   NODE_OPTIONS=--max-old-space-size=${MAX_OLD_SPACE_SIZE} \
   BUILD_STANDALONE=true \
   CSP_POLICY=$CSP_POLICY
-COPY --from=pruner /calcom/out/full/ ./
+COPY package.json yarn.lock .yarnrc.yml playwright.config.ts turbo.json i18n.json ./
+COPY .yarn ./.yarn
+COPY apps ./apps
+COPY packages ./packages
+COPY example-apps ./example-apps
 COPY --from=deps /calcom/node_modules ./node_modules
-COPY --from=deps /calcom/yarn.lock ./yarn.lock
-RUN yarn config set httpTimeout 1200000
-RUN yarn install --immutable
+COPY --from=deps /calcom/.yarn/install-state.gz ./.yarn/install-state.gz
 # Build and make embed servable from web/public/embed folder
 RUN yarn workspace @calcom/trpc run build
 RUN yarn --cwd packages/embeds/embed-core workspace @calcom/embed-core run build
 RUN yarn --cwd apps/web workspace @calcom/web run copy-app-store-static
 RUN yarn --cwd apps/web workspace @calcom/web run build
 RUN rm -rf node_modules/.cache .yarn/cache apps/web/.next/cache
+
 FROM node:20 AS builder-two
 WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NODE_ENV=production
-COPY --from=builder /calcom ./
+COPY package.json .yarnrc.yml turbo.json i18n.json ./
+COPY .yarn ./.yarn
+COPY --from=builder /calcom/yarn.lock ./yarn.lock
+COPY --from=builder /calcom/node_modules ./node_modules
+COPY --from=builder /calcom/packages ./packages
+COPY --from=builder /calcom/apps/web ./apps/web
+COPY --from=builder /calcom/packages/prisma/schema.prisma ./prisma/schema.prisma
 COPY scripts scripts
 RUN chmod +x scripts/*
 # Save value used during this build stage. If NEXT_PUBLIC_WEBAPP_URL and BUILT_NEXT_PUBLIC_WEBAPP_URL differ at
@@ -72,6 +82,7 @@ RUN chmod +x scripts/*
 ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
   BUILT_NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
 RUN scripts/replace-placeholder.sh http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER ${NEXT_PUBLIC_WEBAPP_URL}
+
 FROM node:20 AS runner
 WORKDIR /calcom
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
