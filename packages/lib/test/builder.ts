@@ -1,16 +1,16 @@
+import getICalUID from "@calcom/emails/lib/getICalUID";
+import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/IWebhookRepository";
+import type { Booking, BookingReference, EventType, Prisma, Webhook } from "@calcom/prisma/client";
+import { BookingStatus, CreationSource } from "@calcom/prisma/enums";
+import type { CalendarEvent, Person, VideoCallData } from "@calcom/types/Calendar";
 import { faker } from "@faker-js/faker";
 import type { TFunction } from "i18next";
-
-import getICalUID from "@calcom/emails/lib/getICalUID";
-import type { Booking, EventType, Prisma, Webhook, BookingReference } from "@calcom/prisma/client";
-import { WebhookVersion } from "@calcom/features/webhooks/lib/interface/IWebhookRepository";
-import { CreationSource, BookingStatus } from "@calcom/prisma/enums";
-import type { CalendarEvent, Person, VideoCallData } from "@calcom/types/Calendar";
+import { v4 as uuidv4 } from "uuid";
 
 export const buildVideoCallData = (callData?: Partial<VideoCallData>): VideoCallData => {
   return {
     type: faker.helpers.arrayElement(["zoom_video", "stream_video"]),
-    id: faker.datatype.uuid(),
+    id: uuidv4(),
     password: faker.internet.password(),
     url: faker.internet.url(),
     ...callData,
@@ -19,13 +19,13 @@ export const buildVideoCallData = (callData?: Partial<VideoCallData>): VideoCall
 
 export const buildPerson = (person?: Partial<Person>): Person => {
   return {
-    name: faker.name.firstName(),
+    name: faker.lorem.word(),
     email: faker.internet.email(),
-    timeZone: faker.address.timeZone(),
-    username: faker.internet.userName(),
-    id: faker.datatype.number(),
+    timeZone: "UTC",
+    username: faker.lorem.word(),
+    id: Math.floor(Math.random() * 1_000_000),
     language: {
-      locale: faker.random.locale(),
+      locale: "en",
       translate: ((key: string) => key) as TFunction,
     },
     ...person,
@@ -35,9 +35,9 @@ export const buildPerson = (person?: Partial<Person>): Person => {
 export const buildBooking = (
   booking?: Partial<Booking> & { references?: Partial<BookingReference>[] }
 ): Booking & { references?: Partial<BookingReference>[]; attendees?: [] } => {
-  const uid = faker.datatype.uuid();
+  const uid = uuidv4();
   return {
-    id: faker.datatype.number(),
+    id: Math.floor(Math.random() * 1_000_000),
     uid,
     userId: null,
     eventTypeId: null,
@@ -84,7 +84,7 @@ export const buildBooking = (
 
 export const buildEventType = (eventType?: Partial<EventType>): EventType => {
   return {
-    id: faker.datatype.number(),
+    id: Math.floor(Math.random() * 1_000_000),
     title: faker.lorem.sentence(),
     slug: faker.lorem.slug(),
     description: faker.lorem.paragraph(),
@@ -176,11 +176,11 @@ export const buildEventType = (eventType?: Partial<EventType>): EventType => {
 
 export const buildWebhook = (webhook?: Partial<Webhook>): Webhook => {
   return {
-    id: faker.datatype.uuid(),
-    eventTypeId: faker.datatype.number(),
+    id: uuidv4(),
+    eventTypeId: Math.floor(Math.random() * 1_000_000),
     subscriberUrl: "http://mockedURL.com",
     payloadTemplate: null,
-    createdAt: faker.datatype.datetime(),
+    createdAt: new Date(),
     appId: null,
     userId: null,
     secret: faker.lorem.slug(),
@@ -226,7 +226,7 @@ export const buildCalendarEvent = (
   event?: Partial<CalendarEvent>,
   omitVideoCallData?: boolean
 ): CalendarEvent => {
-  const uid = faker.datatype.uuid();
+  const uid = uuidv4();
   return {
     uid,
     iCalUID: getICalUID({ uid }),
@@ -234,7 +234,7 @@ export const buildCalendarEvent = (
     title: faker.lorem.sentence(),
     startTime: faker.date.future().toISOString(),
     endTime: faker.date.future().toISOString(),
-    location: faker.address.city(),
+    location: "Test location",
     description: faker.lorem.paragraph(),
     attendees: [],
     customInputs: {},
@@ -299,10 +299,10 @@ export const buildUser = <T extends Partial<UserPayload>>(
   return {
     locked: false,
     smsLockState: "UNLOCKED",
-    name: faker.name.firstName(),
+    name: faker.lorem.word(),
     email: faker.internet.email(),
-    timeZone: faker.address.timeZone(),
-    username: faker.internet.userName(),
+    timeZone: "UTC",
+    username: faker.lorem.word(),
     id: 0,
     allowDynamicBooking: true,
     availability: [],

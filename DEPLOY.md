@@ -15,7 +15,7 @@ git commit -m "chore: bump deploy version"
 git push
 
 # Use this as your new default command:
-export TAG=polls-v13
+export TAG=polls-v14
 export CACHE_REF=ghcr.io/gimelg/calcom-custom:buildcache-polls-v1
 docker buildx build --platform linux/amd64 \
   --cache-from type=registry,ref=$CACHE_REF \
