@@ -65,6 +65,9 @@ const EventWebhooksTab = dynamic(() =>
 
 
 const EventPollsTab = dynamic(() => import("./tabs/polls/EventPollsTab").then((mod) => mod.EventPollsTab));
+const EventSpecificMeetingsTab = dynamic(() =>
+  import("./tabs/specific-meetings/EventSpecificMeetingsTab").then((mod) => mod.EventSpecificMeetingsTab)
+);
 
 export type EventTypeWebWrapperProps = {
   id: number;
@@ -223,6 +226,7 @@ const EventTypeWeb = ({
     ),
     recurring: <EventRecurringTab eventType={eventType} />,
     polls: <EventPollsTab eventType={eventType} />,
+    specificMeetings: <EventSpecificMeetingsTab eventType={eventType} />,
     apps: (
       <EventAppsTab
         eventType={{ ...eventType, URL: permalink }}
@@ -262,6 +266,7 @@ const EventTypeWeb = ({
         EventAdvancedTab,
         EventRecurringTab,
         EventPollsTab,
+        EventSpecificMeetingsTab,
         EventAppsTab,
         EventWebhooksTab,
       ];
@@ -292,6 +297,7 @@ const EventTypeWeb = ({
         "advanced",
         "recurring",
         "polls",
+        "specificMeetings",
         "apps",
         "webhooks",
       ])

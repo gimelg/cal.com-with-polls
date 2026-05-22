@@ -10,23 +10,16 @@ import { trpc } from "./trpc";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const resolveEndpoint = (links: any) => {
-  // TODO: Update our trpc routes so they are more clear.
-  // This function parses paths like the following and maps them
-  // to the correct API endpoints.
-  // - viewer.me - 2 segment paths like this are for logged in requests
-  // - viewer.public.i18n - 3 segments paths can be public or authed
+  // TODO: Update our tRPC routes so they are more clear.
+  // Most client paths are formatted as viewer.<endpoint>.<procedurePath>,
+  // but viewer-only routers stay under the viewer endpoint.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (ctx: any) => {
     const parts = ctx.op.path.split(".");
-    let endpoint;
-    let path = "";
-    if (parts.length == 2) {
-      endpoint = parts[0] as keyof typeof links;
-      path = parts[1];
-    } else {
-      endpoint = parts[1] as keyof typeof links;
-      path = parts.splice(2, parts.length - 2).join(".");
-    }
+    const nestedEndpoint = parts[1] as keyof typeof links;
+    const shouldUseNestedEndpoint = parts[0] === "viewer" && nestedEndpoint in links;
+    const endpoint = (shouldUseNestedEndpoint ? nestedEndpoint : parts[0]) as keyof typeof links;
+    const path = shouldUseNestedEndpoint ? parts.slice(2).join(".") : parts.slice(1).join(".");
     return links[endpoint]({ ...ctx, op: { ...ctx.op, path } });
   };
 };

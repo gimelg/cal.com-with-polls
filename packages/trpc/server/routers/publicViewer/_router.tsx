@@ -4,6 +4,7 @@ import { ZUserEmailVerificationRequiredSchema } from "./checkIfUserEmailVerifica
 import { ZMarkHostAsNoShowInputSchema } from "./markHostAsNoShow.schema";
 import { publicPollsRouter } from "./polls/_router";
 import { event } from "./procedures/event";
+import { publicSpecificMeetingsRouter } from "./specificMeetings/_router";
 import { ZSubmitRatingInputSchema } from "./submitRating.schema";
 
 // things that unauthenticated users can query about themselves
@@ -29,4 +30,5 @@ export const publicViewerRouter = router({
       return handler(opts);
     }),
   polls: publicPollsRouter,
+  specificMeetings: publicSpecificMeetingsRouter,
 });

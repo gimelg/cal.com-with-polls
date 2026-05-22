@@ -24,6 +24,7 @@ import { oAuthRouter } from "./oAuth/_router";
 import { oooRouter } from "./ooo/_router";
 import { pollsRouter } from "./polls/_router";
 import { slotsRouter } from "./slots/_router";
+import { specificMeetingsRouter } from "./specificMeetings/_router";
 import { travelSchedulesRouter } from "./travelSchedules/_router";
 import { userAdminRouter } from "./users/_router";
 import { webhookRouter } from "./webhook/_router";
@@ -57,4 +58,5 @@ export const viewerRouter = router({
   holidays: holidaysRouter,
   travelSchedules: travelSchedulesRouter,
   polls: pollsRouter,
+  specificMeetings: specificMeetingsRouter,
 });

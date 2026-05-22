@@ -33,6 +33,7 @@ export const ENDPOINTS = [
   "googleWorkspace",
   "oAuth",
   "polls",
+  "specificMeetings",
   "delegationCredential",
   "credits",
   "filterSegments",
