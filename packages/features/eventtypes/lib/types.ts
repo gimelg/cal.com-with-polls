@@ -460,6 +460,7 @@ export type TabMap = {
   instant?: React.ReactNode;
   limits: React.ReactNode;
   polls?: React.ReactNode;
+  specificMeetings?: React.ReactNode;
   recurring: React.ReactNode;
   setup: React.ReactNode;
   team?: React.ReactNode;

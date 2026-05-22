@@ -221,6 +221,13 @@ function getNavigation({
       "data-testid": "polls",
     },
     {
+      name: t("specific_meetings"),
+      href: `/event-types/${id}?tabName=specificMeetings`,
+      icon: "calendar",
+      info: t("specific_meetings_tab_description"),
+      "data-testid": "specific-meetings",
+    },
+    {
       name: t("apps"),
       href: `/event-types/${id}?tabName=apps`,
       icon: "grid-3x3",

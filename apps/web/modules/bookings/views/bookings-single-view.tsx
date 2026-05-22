@@ -611,7 +611,7 @@ export default function Success(props: PageProps) {
                         <div className="font-medium">{t("when")}</div>
                         <div className="col-span-2 mb-6 last:mb-0">
                           {reschedule && !!formerTime && (
-                            <p className="line-through">
+                            <div className="line-through">
                               <RecurringBookings
                                 eventType={eventType}
                                 duration={calculatedDuration}
@@ -622,7 +622,7 @@ export default function Success(props: PageProps) {
                                 isCancelled={isCancelled}
                                 tz={tz}
                               />
-                            </p>
+                            </div>
                           )}
                           <RecurringBookings
                             eventType={eventType}

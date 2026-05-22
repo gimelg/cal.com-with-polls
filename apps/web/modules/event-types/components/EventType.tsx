@@ -37,6 +37,7 @@ const tabs = [
   "instant",
   "recurring",
   "polls",
+  "specificMeetings",
   "apps",
   "workflows",
   "webhooks",

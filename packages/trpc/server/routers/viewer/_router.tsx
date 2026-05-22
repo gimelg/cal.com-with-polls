@@ -39,6 +39,7 @@ import { phoneNumberRouter } from "./phoneNumber/_router";
 import { pollsRouter } from "./polls/_router";
 import { routingFormsRouter } from "./routing-forms/_router";
 import { slotsRouter } from "./slots/_router";
+import { specificMeetingsRouter } from "./specificMeetings/_router";
 import { ssoRouter } from "./sso/_router";
 import { viewerTeamsRouter } from "./teams/_router";
 import { travelSchedulesRouter } from "./travelSchedules/_router";
@@ -95,4 +96,5 @@ export const viewerRouter = router({
   aiVoiceAgent: aiVoiceAgentRouter,
   phoneNumber: phoneNumberRouter,
   polls: pollsRouter,
+  specificMeetings: specificMeetingsRouter,
 });

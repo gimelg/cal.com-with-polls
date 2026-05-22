@@ -205,6 +205,7 @@ model EventType {
   teamId                             Int?
   hashedLink                         HashedLink[]
   polls                              Poll[]
+  specificMeetings                   SpecificMeeting[]
   bookings                           Booking[]
   availability                       Availability[]
   webhooks                           Webhook[]
@@ -546,6 +547,7 @@ model User {
   oAuthClients                   OAuthClient[]
   holidaySettings                UserHolidaySettings?
   organizedPolls                 Poll[]                        @relation("poll_organizer")
+  organizedSpecificMeetings      SpecificMeeting[]             @relation("specific_meeting_organizer")
   finalizedPolls                 Poll[]                        @relation("poll_finalizer")
 
   autoOptInFeatures Boolean @default(false)
@@ -965,6 +967,7 @@ model Booking {
   wrongAssignmentReports       WrongAssignmentReport[]
   routingTrace                 RoutingTrace?
   finalizedFromPolls           Poll[]                            @relation("poll_finalized_booking")
+  specificMeeting              SpecificMeeting?
 
   // @@partial_index([reassignById])
 
@@ -980,6 +983,60 @@ model Booking {
   @@index([userId, status, startTime])
   @@index([eventTypeId, status])
   @@index([userId, createdAt])
+}
+
+enum SpecificMeetingStatus {
+  SCHEDULED @map("scheduled")
+  CANCELLED @map("cancelled")
+}
+
+enum SpecificMeetingInviteeStatus {
+  PENDING  @map("pending")
+  ACCEPTED @map("accepted")
+  DECLINED @map("declined")
+}
+
+model SpecificMeeting {
+  id          Int                      @id @default(autoincrement())
+  uid         String                   @unique @default(cuid())
+  eventTypeId Int
+  eventType   EventType                @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  organizerId Int
+  organizer   User                     @relation("specific_meeting_organizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  bookingId   Int?                     @unique
+  booking     Booking?                 @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  timeZone    String
+  startTime   DateTime
+  endTime     DateTime
+  status      SpecificMeetingStatus    @default(SCHEDULED)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  cancelledAt DateTime?
+  invitees    SpecificMeetingInvitee[]
+
+  @@index([eventTypeId])
+  @@index([organizerId])
+  @@index([uid])
+}
+
+model SpecificMeetingInvitee {
+  id                Int                          @id @default(autoincrement())
+  uid               String                       @unique @default(cuid())
+  specificMeetingId Int
+  specificMeeting   SpecificMeeting              @relation(fields: [specificMeetingId], references: [id], onDelete: Cascade)
+  name              String
+  email             String
+  responseToken     String                       @unique @default(cuid())
+  status            SpecificMeetingInviteeStatus @default(PENDING)
+  respondedAt       DateTime?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime?                    @updatedAt
+
+  @@index([specificMeetingId])
+  @@index([email])
+  @@index([email, specificMeetingId])
 }
 
 model Poll {

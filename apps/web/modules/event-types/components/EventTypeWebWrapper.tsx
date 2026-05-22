@@ -82,6 +82,9 @@ const EventWebhooksTab = dynamic(() =>
 const EventAITab = dynamic(() => import("./tabs/ai/EventAITab").then((mod) => mod.EventAITab));
 
 const EventPollsTab = dynamic(() => import("./tabs/polls/EventPollsTab").then((mod) => mod.EventPollsTab));
+const EventSpecificMeetingsTab = dynamic(() =>
+  import("./tabs/specific-meetings/EventSpecificMeetingsTab").then((mod) => mod.EventSpecificMeetingsTab)
+);
 
 export type EventTypeWebWrapperProps = {
   id: number;
@@ -264,6 +267,7 @@ const EventTypeWeb = ({
     instant: <EventInstantTab eventType={eventType} isTeamEvent={!!team} />,
     recurring: <EventRecurringTab eventType={eventType} />,
     polls: <EventPollsTab eventType={eventType} />,
+    specificMeetings: <EventSpecificMeetingsTab eventType={eventType} />,
     apps: (
       <EventAppsTab
         eventType={{ ...eventType, URL: permalink }}
@@ -311,6 +315,7 @@ const EventTypeWeb = ({
         EventInstantTab,
         EventRecurringTab,
         EventPollsTab,
+        EventSpecificMeetingsTab,
         EventAppsTab,
         EventWorkflowsTab,
         EventWebhooksTab,
@@ -343,6 +348,7 @@ const EventTypeWeb = ({
         "instant",
         "recurring",
         "polls",
+        "specificMeetings",
         "apps",
         "workflows",
         "webhooks",

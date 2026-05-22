@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Specific Meetings Feature — Cal.com (Implementation Deck)</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #121a33;
+        --panel-2: #1a2547;
+        --text: #e9eeff;
+        --muted: #a6b3d9;
+        --accent: #7aa2ff;
+        --ok: #4ade80;
+        --warn: #fbbf24;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(circle at top right, #1b2b59 0%, var(--bg) 45%);
+        color: var(--text);
+        overflow: hidden;
+      }
+      .deck {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+      }
+      .slide {
+        position: absolute;
+        inset: 0;
+        padding: 56px 72px;
+        display: none;
+      }
+      .slide.active { display: block; }
+      h1 { font-size: 44px; margin: 0 0 16px; line-height: 1.1; }
+      h2 { font-size: 34px; margin: 0 0 14px; }
+      h3 { font-size: 24px; margin: 22px 0 10px; color: var(--accent); }
+      p, li { font-size: 20px; line-height: 1.45; color: var(--text); }
+      ul { margin: 8px 0 0 20px; }
+      .muted { color: var(--muted); }
+      .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .ok { background: rgba(74, 222, 128, 0.16); color: var(--ok); }
+      .warn { background: rgba(251, 191, 36, 0.16); color: var(--warn); }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .card {
+        background: linear-gradient(160deg, var(--panel), var(--panel-2));
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 16px 18px;
+      }
+      code, .path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 15px;
+        background: rgba(255,255,255,0.08);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      .footer {
+        position: absolute;
+        bottom: 16px;
+        left: 24px;
+        right: 24px;
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .kbd {
+        border: 1px solid rgba(255,255,255,0.35);
+        border-bottom-width: 3px;
+        border-radius: 6px;
+        padding: 1px 7px;
+        margin: 0 2px;
+        font-size: 12px;
+      }
+      a { color: #a8c2ff; }
+    </style>
+  </head>
+  <body>
+    <div class="deck">
+      <section class="slide active">
+        <span class="badge ok">Feature Delivery</span>
+        <h1>Specific Meetings with Invite-Only RSVP</h1>
+        <p class="muted">Cal.com additive feature implementation (minimal core coupling)</p>
+        <div class="card" style="margin-top: 24px">
+          <p><strong>Goal:</strong> fixed date/time meetings + invitees + yes/no RSVP (Google Calendar/iCal style)</p>
+          <p><strong>Constraint:</strong> keep upgrades easy by minimizing core code changes</p>
+          <p><strong>Approach:</strong> feature-owned domain + thin booking bridge</p>
+        </div>
+      </section>
+
+      <section class="slide">
+        <h2>Architecture Decisions</h2>
+        <ul>
+          <li>Isolated domain (modeled after Polls) instead of changing core booking semantics</li>
+          <li>RSVP state stored in feature tables, not core <code>Booking</code>/<code>Attendee</code></li>
+          <li>Still creates one real Cal.com booking via <code>RegularBookingService.createBooking</code></li>
+          <li>Public RSVP links are tokenized: <code>/meeting/[uid]?token=...</code></li>
+          <li>Organizer UX integrated as an Event Type tab</li>
+        </ul>
+        <h3>Phase 1 Scope Choice</h3>
+        <p>Track RSVP internally; defer provider-calendar decline sync.</p>
+      </section>
+
+      <section class="slide">
+        <h2>Data Model Added (Prisma)</h2>
+        <div class="grid">
+          <div class="card">
+            <h3 style="margin-top:0">Models</h3>
+            <ul>
+              <li><code>SpecificMeeting</code></li>
+              <li><code>SpecificMeetingInvitee</code></li>
+            </ul>
+            <h3>Enums</h3>
+            <ul>
+              <li><code>SpecificMeetingStatus</code> (SCHEDULED, CANCELLED)</li>
+              <li><code>SpecificMeetingInviteeStatus</code> (PENDING, ACCEPTED, DECLINED)</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Key Relations</h3>
+            <ul>
+              <li><code>EventType</code> → specific meetings</li>
+              <li><code>User</code> organizer relation</li>
+              <li>Optional linked <code>Booking</code></li>
+            </ul>
+            <h3>Lifecycle Fields</h3>
+            <ul>
+              <li><code>status</code></li>
+              <li><code>cancelledAt</code></li>
+              <li>invitee <code>responseToken</code></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <h2>Backend Implementation</h2>
+        <div class="card">
+          <p><strong>Repository:</strong> <span class="path">packages/features/specific-meetings/repositories/SpecificMeetingRepository.ts</span></p>
+          <p><strong>Service:</strong> <span class="path">packages/features/specific-meetings/services/SpecificMeetingService.ts</span></p>
+        </div>
+        <ul>
+          <li>Create specific meeting + validate participants/time window</li>
+          <li>Create linked booking (idempotency key: <code>specific-meeting:${uid}</code>)</li>
+          <li>Attach booking to specific meeting</li>
+          <li>Organizer retrieval/list with per-invitee response URLs</li>
+          <li>Public invitee lookup by uid+token</li>
+          <li>RSVP mutation (accepted/declined)</li>
+          <li>Cancel mutation: cancel booking via <code>handleCancelBooking</code> + mark meeting cancelled</li>
+        </ul>
+      </section>
+
+      <section class="slide">
+        <h2>API (tRPC)</h2>
+        <div class="grid">
+          <div class="card">
+            <h3 style="margin-top:0">Viewer Router</h3>
+            <p class="path">packages/trpc/server/routers/viewer/specificMeetings/_router.ts</p>
+            <ul>
+              <li><code>listByEventType</code></li>
+              <li><code>create</code></li>
+              <li><code>get</code></li>
+              <li><code>cancel</code></li>
+              <li><code>resendInvite</code></li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Public Router</h3>
+            <p class="path">packages/trpc/server/routers/publicViewer/specificMeetings/_router.ts</p>
+            <ul>
+              <li><code>getByUid</code></li>
+              <li><code>respond</code></li>
+            </ul>
+          </div>
+        </div>
+        <p class="muted">Routers registered in viewer/publicViewer root routers.</p>
+      </section>
+
+      <section class="slide">
+        <h2>Frontend Implementation</h2>
+        <div class="grid">
+          <div class="card">
+            <h3 style="margin-top:0">Organizer Tab</h3>
+            <p class="path">apps/web/modules/event-types/components/tabs/specific-meetings/EventSpecificMeetingsTab.tsx</p>
+            <ul>
+              <li>Create fixed meeting with invitees</li>
+              <li>List meetings + invitee statuses</li>
+              <li>Copy invite link</li>
+              <li>Resend invite</li>
+              <li>Cancel meeting</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Public RSVP Page</h3>
+            <p class="path">apps/web/modules/specific-meetings/components/PublicSpecificMeetingPage.tsx</p>
+            <ul>
+              <li>Load invite by uid/token</li>
+              <li>Accept / decline RSVP</li>
+              <li>Show participants + statuses</li>
+              <li>Cancelled-state UI (buttons hidden)</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <h2>Email + i18n</h2>
+        <ul>
+          <li>Specific meeting invite template + React renderer added</li>
+          <li>Email sender added in poll email service module for reuse</li>
+          <li>Invite emails sent on create and resend</li>
+          <li>English translations added for specific meeting UI states and actions</li>
+        </ul>
+        <div class="card">
+          <p><strong>Examples:</strong> create success, cancel success, resend invite success, cancelled meeting message</p>
+        </div>
+      </section>
+
+      <section class="slide">
+        <h2>Testing Delivered</h2>
+        <div class="grid">
+          <div class="card">
+            <h3 style="margin-top:0">Service Tests</h3>
+            <p class="path">packages/features/specific-meetings/services/SpecificMeetingService.test.ts</p>
+            <ul>
+              <li>Create + linked booking</li>
+              <li>Cancel + linked booking cancellation</li>
+              <li>RSVP response path</li>
+              <li>Reject RSVP after cancellation</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="margin-top:0">Router + UI Tests</h3>
+            <ul>
+              <li class="path">.../viewer/specificMeetings/_router.test.ts</li>
+              <li class="path">.../publicViewer/specificMeetings/_router.test.ts</li>
+              <li class="path">PublicSpecificMeetingPage.test.tsx</li>
+              <li class="path">EventSpecificMeetingsTab.test.tsx</li>
+            </ul>
+          </div>
+        </div>
+        <p><span class="badge ok">Current targeted result: 9 tests passed</span></p>
+      </section>
+
+      <section class="slide">
+        <h2>Verification Commands Run</h2>
+        <div class="card">
+          <p><code>NODE_OPTIONS='--max-old-space-size=8192' yarn --cwd packages/trpc build</code> ✅</p>
+          <p><code>NODE_OPTIONS='--max-old-space-size=8192' yarn --cwd apps/web type-check</code> ✅</p>
+          <p><code>yarn vitest run ...specific-meetings...</code> ✅</p>
+        </div>
+        <p class="muted">Targeted validation used to avoid full-monorepo OOM issues.</p>
+      </section>
+
+      <section class="slide">
+        <h2>Current Status & Next Options</h2>
+        <p><span class="badge ok">V1 Complete</span> for the scoped feature set.</p>
+        <h3>Implemented End-to-End</h3>
+        <ul>
+          <li>Create fixed meeting</li>
+          <li>Invite + resend</li>
+          <li>Public RSVP</li>
+          <li>Organizer visibility</li>
+          <li>Cancellation lifecycle</li>
+          <li>Core service/router/UI tests</li>
+        </ul>
+        <h3>Optional Follow-ups</h3>
+        <ul>
+          <li>Linked booking deep-link in organizer UI</li>
+          <li>Provider calendar decline sync</li>
+          <li>Reschedule/edit lifecycle</li>
+        </ul>
+      </section>
+
+      <div class="footer">
+        <div>Specific Meetings Feature Deck</div>
+        <div>
+          <span id="slideIndex">1</span>/<span id="slideCount">1</span>
+          &nbsp;•&nbsp; <span class="kbd">←</span><span class="kbd">→</span> navigate
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const slides = [...document.querySelectorAll('.slide')];
+      const indexEl = document.getElementById('slideIndex');
+      const countEl = document.getElementById('slideCount');
+      let i = 0;
+      countEl.textContent = String(slides.length);
+
+      function render() {
+        slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+        indexEl.textContent = String(i + 1);
+      }
+
+      function next() { i = Math.min(i + 1, slides.length - 1); render(); }
+      function prev() { i = Math.max(i - 1, 0); render(); }
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') next();
+        if (e.key === 'ArrowLeft' || e.key === 'PageUp') prev();
+      });
+
+      window.addEventListener('click', (e) => {
+        const x = e.clientX / window.innerWidth;
+        if (x > 0.55) next();
+        else if (x < 0.45) prev();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
