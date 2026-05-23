@@ -47,6 +47,7 @@ export { PollInviteEmail } from "./PollInviteEmail";
 export { ProrationInvoiceEmail } from "./ProrationInvoiceEmail";
 export { ProrationReminderEmail } from "./ProrationReminderEmail";
 export { SlugReplacementEmail } from "./SlugReplacementEmail";
+export { SpecificMeetingBookingFailedEmail } from "./SpecificMeetingBookingFailedEmail";
 export { SpecificMeetingCancelledEmail } from "./SpecificMeetingCancelledEmail";
 export { SpecificMeetingConfirmationEmail } from "./SpecificMeetingConfirmationEmail";
 export { SpecificMeetingInviteEmail } from "./SpecificMeetingInviteEmail";

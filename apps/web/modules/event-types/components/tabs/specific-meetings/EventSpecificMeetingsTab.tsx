@@ -162,7 +162,7 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
         </div>
 
         <div className="grid gap-4">
-          <TextField label={t("title")} value={title} onChange={(event) => setTitle(event.target.value)} />
+          <TextField name="specificMeetingTitle" label={t("title")} value={title} onChange={(event) => setTitle(event.target.value)} />
           <TextAreaField
             name="description"
             label={t("description")}
@@ -170,6 +170,7 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
             onChange={(event) => setDescription(event.target.value)}
           />
           <TextField
+            name="specificMeetingStartTime"
             type="datetime-local"
             label={t("specific_meeting_start_time")}
             value={startTime}
@@ -189,11 +190,13 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
               className="grid gap-3 rounded-lg border border-subtle p-4 md:grid-cols-[1fr_1fr_auto]"
               key={participant.id}>
               <TextField
+                name={`participant-name-${participant.id}`}
                 label={t("name")}
                 value={participant.name}
                 onChange={(event) => updateParticipant(participant.id, "name", event.target.value)}
               />
               <TextField
+                name={`participant-email-${participant.id}`}
                 label={t("email")}
                 value={participant.email}
                 onChange={(event) => updateParticipant(participant.id, "email", event.target.value)}

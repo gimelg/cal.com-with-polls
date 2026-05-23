@@ -1,3 +1,4 @@
+import { SpecificMeetingService } from "@calcom/features/specific-meetings/services/SpecificMeetingService";
 import { prisma } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 
@@ -67,6 +68,10 @@ export const updateAppCredentialsHandler = async ({ ctx, input }: UpdateAppCrede
       },
     },
   });
+
+  if (updated) {
+    await new SpecificMeetingService().retryPendingBookingsForOrganizer({ organizerId: user.id });
+  }
 
   return !!updated;
 };

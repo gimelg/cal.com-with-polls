@@ -224,14 +224,20 @@ export const PublicSpecificMeetingPage = ({ uid, token, response }: PublicSpecif
           <div className="mt-6 rounded-lg border border-subtle bg-muted p-4 text-default">
             {t("specific_meeting_cancelled")}
           </div>
-        ) : (
+        ) : meeting.invitee.status === "PENDING" ? (
           <div className="mt-6 flex gap-3">
             <Button loading={isSubmitting} onClick={() => void respond("ACCEPTED")}>
-              {t("yes")} 
+              {t("yes")}
             </Button>
             <Button color="secondary" loading={isSubmitting} onClick={() => void respond("DECLINED")}>
               {t("no")}
             </Button>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-lg border border-subtle bg-muted p-4 text-default">
+            {meeting.invitee.status === "ACCEPTED"
+              ? t("specific_meeting_response_accepted")
+              : t("specific_meeting_response_declined")}
           </div>
         )}
 

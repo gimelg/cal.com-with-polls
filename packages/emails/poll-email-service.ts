@@ -10,6 +10,8 @@ import type { SpecificMeetingConfirmationEmailInput } from "./templates/specific
 import SpecificMeetingConfirmationEmail from "./templates/specific-meeting-confirmation-email";
 import type { SpecificMeetingInviteEmailInput } from "./templates/specific-meeting-invite-email";
 import SpecificMeetingInviteEmail from "./templates/specific-meeting-invite-email";
+import type { SpecificMeetingBookingFailedEmailInput } from "./templates/specific-meeting-booking-failed-email";
+import SpecificMeetingBookingFailedEmail from "./templates/specific-meeting-booking-failed-email";
 
 const sendEmail = (prepare: () => BaseEmail) => {
   return new Promise((resolve, reject) => {
@@ -41,4 +43,8 @@ export const sendSpecificMeetingCancelledEmail = async (input: SpecificMeetingCa
 
 export const sendSpecificMeetingConfirmationEmail = async (input: SpecificMeetingConfirmationEmailInput) => {
   await sendEmail(() => new SpecificMeetingConfirmationEmail(input));
+};
+
+export const sendSpecificMeetingBookingFailedEmail = async (input: SpecificMeetingBookingFailedEmailInput) => {
+  await sendEmail(() => new SpecificMeetingBookingFailedEmail(input));
 };

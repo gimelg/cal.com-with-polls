@@ -996,25 +996,35 @@ enum SpecificMeetingInviteeStatus {
   DECLINED @map("declined")
 }
 
+enum SpecificMeetingBookingStatus {
+  NOT_STARTED @map("not_started")
+  FAILED      @map("failed")
+  COMPLETED   @map("completed")
+}
+
 model SpecificMeeting {
-  id          Int                      @id @default(autoincrement())
-  uid         String                   @unique @default(cuid())
-  eventTypeId Int
-  eventType   EventType                @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
-  organizerId Int
-  organizer   User                     @relation("specific_meeting_organizer", fields: [organizerId], references: [id], onDelete: Cascade)
-  bookingId   Int?                     @unique
-  booking     Booking?                 @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  title       String
-  description String?
-  timeZone    String
-  startTime   DateTime
-  endTime     DateTime
-  status      SpecificMeetingStatus    @default(SCHEDULED)
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
-  cancelledAt DateTime?
-  invitees    SpecificMeetingInvitee[]
+  id                       Int                          @id @default(autoincrement())
+  uid                      String                       @unique @default(cuid())
+  eventTypeId              Int
+  eventType                EventType                    @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  organizerId              Int
+  organizer                User                         @relation("specific_meeting_organizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  bookingId                Int?                         @unique
+  booking                  Booking?                     @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  title                    String
+  description              String?
+  timeZone                 String
+  startTime                DateTime
+  endTime                  DateTime
+  status                   SpecificMeetingStatus        @default(SCHEDULED)
+  bookingStatus            SpecificMeetingBookingStatus @default(NOT_STARTED)
+  bookingFailureReason     String?
+  bookingFailureNotifiedAt DateTime?
+  bookingLastAttemptAt     DateTime?
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  cancelledAt              DateTime?
+  invitees                 SpecificMeetingInvitee[]
 
   @@index([eventTypeId])
   @@index([organizerId])

@@ -4,6 +4,8 @@ import { SpecificMeetingService } from "./SpecificMeetingService";
 
 const createBookingMock = vi.fn();
 const handleCancelBookingMock = vi.fn();
+const sendSpecificMeetingConfirmationEmailMock = vi.fn();
+const sendSpecificMeetingBookingFailedEmailMock = vi.fn();
 
 vi.mock("@calcom/features/bookings/di/RegularBookingService.container", () => ({
   getRegularBookingService: () => ({
@@ -13,6 +15,11 @@ vi.mock("@calcom/features/bookings/di/RegularBookingService.container", () => ({
 
 vi.mock("@calcom/features/bookings/lib/handleCancelBooking", () => ({
   default: (...args: unknown[]) => handleCancelBookingMock(...args),
+}));
+
+vi.mock("@calcom/emails/poll-email-service", () => ({
+  sendSpecificMeetingConfirmationEmail: (...args: unknown[]) => sendSpecificMeetingConfirmationEmailMock(...args),
+  sendSpecificMeetingBookingFailedEmail: (...args: unknown[]) => sendSpecificMeetingBookingFailedEmailMock(...args),
 }));
 
 describe("SpecificMeetingService", () => {
@@ -25,6 +32,9 @@ describe("SpecificMeetingService", () => {
     findInviteeContext: vi.fn(),
     updateInviteeResponse: vi.fn(),
     cancelSpecificMeeting: vi.fn(),
+    markBookingFailure: vi.fn(),
+    markBookingFailureNotificationSent: vi.fn(),
+    findPendingBookingRetries: vi.fn(),
   };
 
   const service = new SpecificMeetingService(repository as never);
@@ -33,7 +43,7 @@ describe("SpecificMeetingService", () => {
     vi.clearAllMocks();
   });
 
-  it("creates a meeting and underlying booking", async () => {
+  it("creates a meeting without creating a booking yet", async () => {
     repository.findOwnedEventType.mockResolvedValue({
       id: 100,
       title: "1:1",
@@ -60,8 +70,6 @@ describe("SpecificMeetingService", () => {
         { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: "PENDING", respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
       ],
     });
-    createBookingMock.mockResolvedValue({ id: 222 });
-    repository.attachBooking.mockResolvedValue({});
     repository.findOwnedByUid.mockResolvedValue({
       id: 1,
       uid: "sm_1",
@@ -73,7 +81,7 @@ describe("SpecificMeetingService", () => {
       status: SpecificMeetingStatus.SCHEDULED,
       createdAt: new Date(),
       updatedAt: new Date(),
-      bookingId: 222,
+      bookingId: null,
       organizer: { id: 10, name: "Org", email: "org@example.com" },
       eventType: { id: 100, title: "1:1", slug: "one-on-one", length: 30, locations: [], userId: 10 },
       invitees: [
@@ -102,16 +110,8 @@ describe("SpecificMeetingService", () => {
         invitees: [{ name: "Alex", email: "alex@example.com" }],
       })
     );
-    expect(createBookingMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        bookingData: expect.objectContaining({
-          eventTypeId: 100,
-          idempotencyKey: "specific-meeting:sm_1",
-          metadata: expect.objectContaining({ specificMeetingUid: "sm_1" }),
-        }),
-      })
-    );
-    expect(repository.attachBooking).toHaveBeenCalledWith({ uid: "sm_1", bookingId: 222 });
+    expect(createBookingMock).not.toHaveBeenCalled();
+    expect(repository.attachBooking).not.toHaveBeenCalled();
     expect(result.invitees[0]?.responseUrl).toBe("/meeting/sm_1?token=token_1");
   });
 
@@ -208,12 +208,17 @@ describe("SpecificMeetingService", () => {
       startTime: new Date("2026-04-01T10:00:00.000Z"),
       endTime: new Date("2026-04-01T10:30:00.000Z"),
       status: SpecificMeetingStatus.SCHEDULED,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      bookingId: null,
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+      eventType: { id: 100, locations: [] },
       invitees: [
         { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: SpecificMeetingInviteeStatus.PENDING, respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
       ],
     });
     repository.updateInviteeResponse.mockResolvedValue({});
+    createBookingMock.mockResolvedValue({ id: 222, uid: "booking_1" });
+    repository.attachBooking.mockResolvedValue({});
+    repository.markBookingFailure.mockResolvedValue({ bookingFailureNotifiedAt: new Date() });
     repository.findInviteeContext.mockResolvedValueOnce({
       id: 1,
       uid: "sm_1",
@@ -223,7 +228,9 @@ describe("SpecificMeetingService", () => {
       startTime: new Date("2026-04-01T10:00:00.000Z"),
       endTime: new Date("2026-04-01T10:30:00.000Z"),
       status: SpecificMeetingStatus.SCHEDULED,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      bookingId: null,
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+      eventType: { id: 100, locations: [] },
       invitees: [
         { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: SpecificMeetingInviteeStatus.PENDING, respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
       ],
@@ -235,6 +242,15 @@ describe("SpecificMeetingService", () => {
       response: "ACCEPTED",
     });
 
+    expect(createBookingMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookingData: expect.objectContaining({
+          eventTypeId: 100,
+          idempotencyKey: "specific-meeting:sm_1",
+        }),
+      })
+    );
+    expect(repository.attachBooking).toHaveBeenCalledWith({ uid: "sm_1", bookingId: 222 });
     expect(repository.updateInviteeResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         inviteeId: 11,
