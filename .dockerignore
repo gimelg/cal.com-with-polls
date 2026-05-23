@@ -1,15 +1,26 @@
 # Dependencies
 node_modules
 **/node_modules
+example-apps/**/node_modules
+example-apps/**/node_modules/**
 
 # Build outputs
 .next
+.next/**
 **/.next
+**/.next/**
+apps/web/.next
+apps/web/.next/**
 dist
 **/dist
 build
 **/build
 out
+artifacts
+.turbo
+.turbo/**
+**/.turbo
+**/.turbo/**
 
 # Git
 .git
@@ -20,8 +31,6 @@ coverage
 **/coverage
 test-results
 **/test-results
-.turbo
-**/.turbo
 
 # Logs
 *.log
@@ -35,3 +44,7 @@ Thumbs.db
 
 # Examples and docs
 docs
+
+# Local tooling
+.pi
+__checks__
