@@ -58,7 +58,10 @@ That's where Cal.com comes in. Self-hosted or hosted by us. White-label by desig
 
 ## Fork notes
 
-This fork includes an implemented scheduling poll feature that lets organizers collect participant availability and finalize a winning slot into a booking.
+This fork includes two custom scheduling features:
+
+- **Scheduling polls**: organizers can collect participant availability and finalize a winning slot into a booking.
+- **Specific meetings**: organizers can create a one-off meeting from an event type, invite named participants, send RSVP links by email, track accepted/declined responses, resend invites, and cancel the scheduled meeting.
 
 ## Recognition
 
