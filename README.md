@@ -56,10 +56,10 @@ Cal.diy is **100% MIT-licensed** with no proprietary "Enterprise Edition" featur
 
 ## Fork notes
 
-This fork includes two major scheduling features built on top of Cal.com:
+This fork includes two custom scheduling features:
 
 - **Scheduling polls**: organizers can propose multiple time slots, collect participant availability, and finalize the winning slot into a booking.
-- **Specific meetings**: organizers can invite a defined set of people to a meeting flow with RSVP, participant coordination, and booking creation tied to the invited group.
+- **Specific meetings**: organizers can create a one-off meeting from an event type, invite named participants, send RSVP links by email, track accepted or declined responses, resend invites, and cancel the scheduled meeting.
 
 These features are custom to this fork and are intended to be preserved while syncing the codebase with upstream Cal.com.
 
