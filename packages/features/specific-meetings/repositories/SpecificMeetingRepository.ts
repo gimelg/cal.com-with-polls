@@ -23,17 +23,23 @@ const specificMeetingSelect = {
   startTime: true,
   endTime: true,
   status: true,
+  bookingStatus: true,
+  bookingFailureReason: true,
+  bookingFailureNotifiedAt: true,
+  bookingLastAttemptAt: true,
   createdAt: true,
   updatedAt: true,
   bookingId: true,
   booking: {
     select: {
+      id: true,
       uid: true,
     },
   },
   organizer: {
     select: {
       id: true,
+      uuid: true,
       name: true,
       email: true,
     },
@@ -115,6 +121,36 @@ export class SpecificMeetingRepository {
       },
       data: {
         bookingId: input.bookingId,
+        bookingStatus: "COMPLETED",
+        bookingFailureReason: null,
+        bookingFailureNotifiedAt: null,
+        bookingLastAttemptAt: new Date(),
+      },
+      select: specificMeetingSelect,
+    });
+  }
+
+  async markBookingFailure(input: { uid: string; reason: string }) {
+    return await prisma.specificMeeting.update({
+      where: {
+        uid: input.uid,
+      },
+      data: {
+        bookingStatus: "FAILED",
+        bookingFailureReason: input.reason,
+        bookingLastAttemptAt: new Date(),
+      },
+      select: specificMeetingSelect,
+    });
+  }
+
+  async markBookingFailureNotificationSent(input: { uid: string }) {
+    return await prisma.specificMeeting.update({
+      where: {
+        uid: input.uid,
+      },
+      data: {
+        bookingFailureNotifiedAt: new Date(),
       },
       select: specificMeetingSelect,
     });
@@ -138,6 +174,26 @@ export class SpecificMeetingRepository {
       },
       orderBy: {
         startTime: "desc",
+      },
+      select: specificMeetingSelect,
+    });
+  }
+
+  async findPendingBookingRetries(input: { organizerId: number }) {
+    return await prisma.specificMeeting.findMany({
+      where: {
+        organizerId: input.organizerId,
+        status: "SCHEDULED",
+        bookingId: null,
+        bookingStatus: "FAILED",
+        invitees: {
+          some: {
+            status: "ACCEPTED",
+          },
+        },
+      },
+      orderBy: {
+        startTime: "asc",
       },
       select: specificMeetingSelect,
     });
@@ -175,16 +231,29 @@ export class SpecificMeetingRepository {
         startTime: true,
         endTime: true,
         status: true,
+        bookingStatus: true,
+        bookingFailureReason: true,
+        bookingFailureNotifiedAt: true,
+        bookingLastAttemptAt: true,
+        bookingId: true,
         booking: {
           select: {
+            id: true,
             uid: true,
           },
         },
         organizer: {
           select: {
             id: true,
+            uuid: true,
             name: true,
             email: true,
+          },
+        },
+        eventType: {
+          select: {
+            id: true,
+            locations: true,
           },
         },
         invitees: {

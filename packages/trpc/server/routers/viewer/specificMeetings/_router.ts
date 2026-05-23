@@ -163,7 +163,7 @@ export const specificMeetingsRouter = router({
       });
 
       await Promise.allSettled(
-        meeting.invitees.map(async (invitee) => {
+        (meeting.invitees ?? []).map(async (invitee) => {
           await sendInviteForMeetingInvitee({
             meeting,
             invitee,
@@ -203,7 +203,7 @@ export const specificMeetingsRouter = router({
       });
 
       await Promise.allSettled(
-        meeting.invitees.map(async (invitee) => {
+        (meeting.invitees ?? []).map(async (invitee) => {
           await sendCancellationForMeetingInvitee({
             meeting,
             invitee,

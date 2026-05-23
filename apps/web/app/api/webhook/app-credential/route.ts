@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import z from "zod";
 
 import { appStoreMetadata } from "@calcom/app-store/appStoreMetaData";
+import { SpecificMeetingService } from "@calcom/features/specific-meetings/services/SpecificMeetingService";
 import { CREDENTIAL_SYNC_SECRET, CREDENTIAL_SYNC_SECRET_HEADER_NAME } from "@calcom/lib/constants";
 import { APP_CREDENTIAL_SHARING_ENABLED } from "@calcom/lib/constants";
 import { symmetricDecrypt } from "@calcom/lib/crypto";
@@ -85,6 +86,7 @@ async function postHandler(request: NextRequest) {
           key: keys,
         },
       });
+      await new SpecificMeetingService().retryPendingBookingsForOrganizer({ organizerId: reqBody.userId });
       return NextResponse.json({ message: `Credentials updated for userId: ${reqBody.userId}` });
     } else {
       await prisma.credential.create({
@@ -95,6 +97,7 @@ async function postHandler(request: NextRequest) {
           type: appMetadata.type,
         },
       });
+      await new SpecificMeetingService().retryPendingBookingsForOrganizer({ organizerId: reqBody.userId });
       return NextResponse.json({ message: `Credentials created for userId: ${reqBody.userId}` });
     }
   } catch (error) {

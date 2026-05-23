@@ -8,11 +8,15 @@ import {
 import { getRegularBookingService } from "@calcom/features/bookings/di/RegularBookingService.container";
 import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
 import type { CreateRegularBookingData } from "@calcom/features/bookings/lib/dto/types";
+import { getHideBranding } from "@calcom/features/profile/lib/hideBranding";
+import { getTranslation } from "@calcom/i18n/server";
+import { WEBAPP_URL } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
 import type { Prisma } from "@calcom/prisma/client";
 import { CreationSource, SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
+import { sendSpecificMeetingBookingFailedEmail, sendSpecificMeetingConfirmationEmail } from "@calcom/emails/poll-email-service";
 import { SpecificMeetingRepository } from "../repositories/SpecificMeetingRepository";
 
 type CreateSpecificMeetingInput = {
@@ -31,6 +35,21 @@ export class SpecificMeetingService {
 
   constructor(repository = SpecificMeetingRepository.create()) {
     this.repository = repository;
+  }
+
+  async retryPendingBookingsForOrganizer(input: { organizerId: number }) {
+    const meetings = await this.repository.findPendingBookingRetries(input);
+
+    await Promise.allSettled(
+      meetings.map(async (meeting) => {
+        const booking = await this.tryCreateBookingForMeeting(meeting);
+        if (!booking?.uid) {
+          return;
+        }
+
+        await this.sendConfirmationEmails(meeting, booking.uid);
+      })
+    );
   }
 
   async create(input: CreateSpecificMeetingInput) {
@@ -61,6 +80,8 @@ export class SpecificMeetingService {
       throw new ErrorWithCode(ErrorCode.BadRequest, "Participant emails must be unique");
     }
 
+    await this.resolveLocationValue(eventType.locations);
+
     const meeting = await this.repository.createSpecificMeeting({
       organizerId: input.organizerId,
       eventTypeId: input.eventTypeId,
@@ -70,57 +91,6 @@ export class SpecificMeetingService {
       startTime: input.startTime,
       endTime: input.endTime,
       invitees: normalizedParticipants,
-    });
-
-    const [primaryParticipant, ...guestParticipants] = normalizedParticipants;
-    const locationValue = this.resolveLocationValue(eventType.locations);
-    const responses: Record<string, unknown> = {
-      name: primaryParticipant.name,
-      email: primaryParticipant.email,
-      guests: guestParticipants.map((participant) => participant.email),
-    };
-
-    if (locationValue) {
-      responses.location = {
-        optionValue: locationValue,
-        value: locationValue,
-      };
-    }
-
-    const bookingData: CreateRegularBookingData & {
-      idempotencyKey: string;
-      responses: Record<string, unknown>;
-    } = {
-      eventTypeId: eventType.id,
-      start: input.startTime.toISOString(),
-      end: input.endTime.toISOString(),
-      timeZone: input.timeZone,
-      language: "en",
-      idempotencyKey: `specific-meeting:${meeting.uid}`,
-      metadata: {
-        specificMeetingId: String(meeting.id),
-        specificMeetingUid: meeting.uid,
-      },
-      responses,
-      noEmail: false,
-      creationSource: CreationSource.WEBAPP,
-    };
-
-    const booking = await getRegularBookingService().createBooking({
-      bookingData,
-      bookingMeta: {
-        userId: input.organizerId,
-        impersonatedByUserUuid: null,
-      },
-    });
-
-    if (!booking?.id) {
-      throw new ErrorWithCode(ErrorCode.InternalServerError, "Specific meeting booking could not be created");
-    }
-
-    await this.repository.attachBooking({
-      uid: meeting.uid,
-      bookingId: booking.id,
     });
 
     return await this.getForOrganizer({
@@ -226,6 +196,7 @@ export class SpecificMeetingService {
         id: item.id,
         name: item.name,
         email: item.email,
+        responseToken: item.responseToken,
         status: item.status,
         respondedAt: item.respondedAt,
       })),
@@ -256,16 +227,191 @@ export class SpecificMeetingService {
       status = SpecificMeetingInviteeStatus.ACCEPTED;
     }
 
+    let bookingUid: string | null = null;
+    if (status === SpecificMeetingInviteeStatus.ACCEPTED && !meeting.bookingId) {
+      const booking = await this.tryCreateBookingForMeeting(meeting);
+      bookingUid = booking?.uid ?? null;
+    }
+
     await this.repository.updateInviteeResponse({
       inviteeId: invitee.id,
       status,
       respondedAt: new Date(),
     });
 
-    return await this.getInviteeView({
+    const updatedMeeting = await this.getInviteeView({
       uid: input.uid,
       responseToken: input.responseToken,
     });
+
+    if (status === SpecificMeetingInviteeStatus.ACCEPTED && bookingUid) {
+      await this.sendConfirmationEmails(updatedMeeting, bookingUid);
+    }
+
+    await this.cancelBookingIfNoParticipantsRemain(updatedMeeting);
+
+    return updatedMeeting;
+  }
+
+  private async tryCreateBookingForMeeting(meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>) {
+    try {
+      const [primaryInvitee, ...guestInvitees] = meeting.invitees;
+      const locationValue = this.resolveLocationValue(meeting.eventType.locations);
+      const responses: Record<string, unknown> = {
+        name: primaryInvitee.name,
+        email: primaryInvitee.email,
+        guests: guestInvitees.map((participant) => participant.email),
+      };
+
+      if (locationValue) {
+        responses.location = {
+          optionValue: locationValue,
+          value: locationValue,
+        };
+      }
+
+      const bookingData: CreateRegularBookingData & {
+        idempotencyKey: string;
+        responses: Record<string, unknown>;
+      } = {
+        eventTypeId: meeting.eventType.id,
+        start: meeting.startTime.toISOString(),
+        end: meeting.endTime.toISOString(),
+        timeZone: meeting.timeZone,
+        language: "en",
+        idempotencyKey: `specific-meeting:${meeting.uid}`,
+        metadata: {
+          specificMeetingId: String(meeting.id),
+          specificMeetingUid: meeting.uid,
+        },
+        responses,
+        noEmail: false,
+        creationSource: CreationSource.WEBAPP,
+      };
+
+      const booking = await getRegularBookingService().createBooking({
+        bookingData,
+        bookingMeta: {
+          userId: meeting.organizer.id,
+          impersonatedByUserUuid: null,
+        },
+      });
+
+      if (!booking?.id || !booking?.uid) {
+        throw new ErrorWithCode(ErrorCode.InternalServerError, "Specific meeting booking could not be created");
+      }
+
+      await this.repository.attachBooking({
+        uid: meeting.uid,
+        bookingId: booking.id,
+      });
+
+      return booking;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Specific meeting booking could not be created";
+      const failedMeeting = await this.repository.markBookingFailure({ uid: meeting.uid, reason });
+
+      if (!failedMeeting.bookingFailureNotifiedAt) {
+        await this.sendBookingFailureEmail(failedMeeting);
+        await this.repository.markBookingFailureNotificationSent({ uid: meeting.uid });
+      }
+
+      return null;
+    }
+  }
+
+  private async cancelBookingIfNoParticipantsRemain(
+    meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>
+  ) {
+    if (!meeting.bookingId || meeting.status === SpecificMeetingStatus.CANCELLED) {
+      return;
+    }
+
+    const hasAcceptedInvitee = meeting.invitees.some(
+      (currentInvitee) => currentInvitee.status === SpecificMeetingInviteeStatus.ACCEPTED
+    );
+    if (hasAcceptedInvitee) {
+      return;
+    }
+
+    await handleCancelBooking({
+      userId: meeting.organizer.id,
+      userUuid: meeting.organizer.uuid,
+      bookingData: {
+        id: meeting.bookingId,
+        cancellationReason: "Specific meeting no longer has participants",
+        cancelledBy: meeting.organizer.email,
+      },
+      actionSource: "WEBAPP",
+      impersonatedByUserUuid: null,
+    });
+  }
+
+  private async sendBookingFailureEmail(
+    meeting: Awaited<ReturnType<SpecificMeetingRepository["findInviteeContext"]>> extends infer T ? NonNullable<T> : never
+  ) {
+    const t = await getTranslation("en", "common");
+    const appsLink = new URL("/apps/installed", WEBAPP_URL).toString();
+    const meetingLink = new URL(`/event-types/${meeting.eventType.id}?tabName=specificMeetings`, WEBAPP_URL).toString();
+    const meetingTime = new Intl.DateTimeFormat("en", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: meeting.timeZone,
+    }).format(new Date(meeting.startTime));
+
+    let hideBranding = false;
+    try {
+      hideBranding = await getHideBranding({ userId: meeting.organizer.id });
+    } catch {}
+
+    await sendSpecificMeetingBookingFailedEmail({
+      to: meeting.organizer.email,
+      organizerName: meeting.organizer.name || meeting.organizer.email,
+      meetingTitle: meeting.title,
+      meetingTime,
+      meetingLink,
+      appsLink,
+      failureReason: meeting.bookingFailureReason,
+      hideBranding,
+      t,
+    });
+  }
+
+  private async sendConfirmationEmails(
+    meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>,
+    bookingUid: string
+  ) {
+    const t = await getTranslation("en", "common");
+    const meetingTime = new Intl.DateTimeFormat("en", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: meeting.timeZone,
+    }).format(new Date(meeting.startTime));
+
+    let hideBranding = false;
+    try {
+      hideBranding = await getHideBranding({ userId: meeting.organizer.id });
+    } catch {}
+
+    await Promise.allSettled(
+      meeting.invitees
+        .filter((currentInvitee) => currentInvitee.status === SpecificMeetingInviteeStatus.ACCEPTED)
+        .map(async (currentInvitee) => {
+          await sendSpecificMeetingConfirmationEmail({
+            to: currentInvitee.email,
+            organizerName: meeting.organizer.name || meeting.organizer.email,
+            participantName: currentInvitee.name,
+            meetingTitle: meeting.title,
+            meetingDescription: meeting.description,
+            meetingTime,
+            meetingLink: new URL(`/meeting/${meeting.uid}?token=${currentInvitee.responseToken}`, WEBAPP_URL).toString(),
+            cancelLink: new URL(`/booking/${bookingUid}?cancel=true&cancelledBy=${encodeURIComponent(currentInvitee.email)}`, WEBAPP_URL).toString(),
+            rescheduleLink: new URL(`/reschedule/${bookingUid}?rescheduledBy=${encodeURIComponent(currentInvitee.email)}`, WEBAPP_URL).toString(),
+            hideBranding,
+            t,
+          });
+        })
+    );
   }
 
   private resolveLocationValue(locations: Prisma.JsonValue | null) {

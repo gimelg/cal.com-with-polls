@@ -27,11 +27,20 @@ describe("public specific meetings router", () => {
   });
 
   it("records an invitee response", async () => {
-    specificMeetingServiceMock.respond.mockResolvedValue({ uid: "sm_1", invitee: { id: 11 } });
+    specificMeetingServiceMock.respond.mockResolvedValue({
+      uid: "sm_1",
+      booking: { uid: "booking_1" },
+      organizer: { id: 10, name: "Organizer", email: "organizer@example.com" },
+      invitee: { id: 11, name: "Alex", email: "alex@example.com" },
+      title: "Planning",
+      description: null,
+      timeZone: "UTC",
+      startTime: new Date("2026-04-01T10:00:00.000Z"),
+    });
 
     const result = await caller.respond({ uid: "sm_1", token: "token_1", response: "ACCEPTED" });
 
-    expect(result).toEqual({ uid: "sm_1", invitee: { id: 11 } });
+    expect(result).toEqual(expect.objectContaining({ uid: "sm_1", invitee: expect.objectContaining({ id: 11 }) }));
     expect(specificMeetingServiceMock.respond).toHaveBeenCalledWith({
       uid: "sm_1",
       responseToken: "token_1",
