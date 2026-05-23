@@ -31,7 +31,21 @@ docker image prune -a -f
 docker system prune -a -f
 ```
 
-### 1b) Build and push
+### 1b) If you changed Prisma schema, commit the migration too
+
+Before building, make sure schema changes include a migration and generated client updates.
+
+```bash
+# if schema.prisma changed
+mkdir -p packages/prisma/migrations/<timestamp>_<name>
+# add your migration.sql there if not already created
+
+yarn prisma generate
+
+git add packages/prisma/schema.prisma packages/prisma/migrations packages/prisma/generated packages/prisma/zod packages/prisma/enums
+```
+
+### 1c) Build and push
 
 ```bash
 # Use this as your new default command:
@@ -74,6 +88,19 @@ Then run:
 ```bash
 docker compose pull
 docker compose up -d --force-recreate
+```
+
+### 2a) Run Prisma migrations on VPS if needed
+
+If the release includes a new migration, run it inside the updated app container before validating the app:
+
+```bash
+docker compose exec calcom yarn prisma migrate deploy
+```
+
+Then check logs:
+
+```bash
 docker logs --tail=120 calcom
 ```
 
