@@ -13,7 +13,27 @@ git pull --ff-only
 git add .
 git commit -m "chore: bump deploy version"
 git push
+```
 
+### 1a) Clean up local build artifacts before building
+
+Do this before a new Docker build, especially if the previous build failed with disk-space errors or if local caches got large.
+
+```bash
+rm -rf apps/web/.next .turbo artifacts out
+```
+
+Optional Docker cleanup on your local machine:
+
+```bash
+docker builder prune -a -f
+docker image prune -a -f
+docker system prune -a -f
+```
+
+### 1b) Build and push
+
+```bash
 # Use this as your new default command:
 export TAG=polls-v14
 export CACHE_REF=ghcr.io/gimelg/calcom-custom:buildcache-polls-v1
