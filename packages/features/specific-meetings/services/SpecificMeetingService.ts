@@ -5,7 +5,10 @@ import {
   isAttendeeInputRequired,
   OrganizerDefaultConferencingAppType,
 } from "@calcom/app-store/locations";
-import { sendSpecificMeetingBookingFailedEmail } from "@calcom/emails/poll-email-service";
+import {
+  sendSpecificMeetingBookingFailedEmail,
+  sendSpecificMeetingConfirmationEmail,
+} from "@calcom/emails/poll-email-service";
 import { getRegularBookingService } from "@calcom/features/bookings/di/RegularBookingService.container";
 import type { CreateRegularBookingData } from "@calcom/features/bookings/lib/dto/types";
 import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
@@ -331,6 +334,10 @@ export class SpecificMeetingService {
 
     await this.cancelBookingIfNoParticipantsRemain(updatedMeeting);
 
+    if (status === SpecificMeetingInviteeStatus.ACCEPTED) {
+      await this.sendConfirmationEmailToAcceptedInvitee(updatedMeeting);
+    }
+
     return updatedMeeting;
   }
 
@@ -429,6 +436,54 @@ export class SpecificMeetingService {
       },
       actionSource: "WEBAPP",
       impersonatedByUserUuid: null,
+    });
+  }
+
+  private async sendConfirmationEmailToAcceptedInvitee(
+    meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>
+  ) {
+    if (!meeting.booking?.uid || meeting.invitee.status !== SpecificMeetingInviteeStatus.ACCEPTED) {
+      return;
+    }
+
+    const t = await getTranslation("en", "common");
+    const meetingTime = new Intl.DateTimeFormat("en", {
+      dateStyle: "long",
+      timeStyle: "short",
+      timeZone: meeting.timeZone,
+    }).format(new Date(meeting.startTime));
+
+    const bookingLink = new URL(`/booking/${meeting.booking.uid}`, WEBAPP_URL).toString();
+    const cancelLink = new URL(
+      `/booking/${meeting.booking.uid}?cancel=true&cancelledBy=${encodeURIComponent(meeting.invitee.email)}`,
+      WEBAPP_URL
+    ).toString();
+    const rescheduleLink = new URL(
+      `/reschedule/${meeting.booking.uid}?rescheduledBy=${encodeURIComponent(meeting.invitee.email)}`,
+      WEBAPP_URL
+    ).toString();
+
+    let hideBranding = false;
+    try {
+      hideBranding = await getHideBranding({ userId: meeting.organizer.id });
+    } catch {}
+
+    await sendSpecificMeetingConfirmationEmail({
+      to: meeting.invitee.email,
+      organizerName: meeting.organizer.name || meeting.organizer.email,
+      participantName: meeting.invitee.name,
+      meetingTitle: meeting.title,
+      meetingDescription: meeting.description,
+      meetingTime,
+      meetingLink: bookingLink,
+      cancelLink,
+      rescheduleLink,
+      inviteeStatuses: meeting.invitees.map((invitee) => ({
+        name: invitee.name,
+        status: invitee.status,
+      })),
+      hideBranding,
+      t,
     });
   }
 

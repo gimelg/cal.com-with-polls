@@ -13,6 +13,10 @@ export type SpecificMeetingConfirmationEmailProps = {
   meetingLink: string;
   cancelLink: string;
   rescheduleLink: string;
+  inviteeStatuses: Array<{
+    name: string;
+    status: "PENDING" | "ACCEPTED" | "DECLINED";
+  }>;
   hideBranding: boolean;
 };
 
@@ -59,14 +63,34 @@ export const SpecificMeetingConfirmationEmail = (
         ) : null}
       </div>
 
+      <div style={{ marginTop: "16px", border: "1px solid #E5E7EB", borderRadius: "8px", padding: "16px" }}>
+        <p style={{ fontWeight: 600, lineHeight: "24px", margin: "0 0 8px" }}>
+          {props.t("specific_meeting_confirmation_email_invitee_statuses")}
+        </p>
+        {props.inviteeStatuses.map((invitee) => (
+          <p key={invitee.name} style={{ fontWeight: 400, lineHeight: "24px", margin: "0 0 4px" }}>
+            <strong>{invitee.name}:</strong>{" "}
+            {props.t(`specific_meeting_invitee_status_${invitee.status.toLowerCase()}`)}
+          </p>
+        ))}
+      </div>
+
       <hr style={{ marginTop: "24px", marginBottom: "24px" }} />
 
       <div>
         <div style={{ display: "inline-block", marginRight: "12px", marginBottom: "12px" }}>
-          <CallToAction label={props.t("specific_meeting_confirmation_email_reschedule_cta")} href={props.rescheduleLink} secondary />
+          <CallToAction
+            label={props.t("specific_meeting_confirmation_email_reschedule_cta")}
+            href={props.rescheduleLink}
+            secondary
+          />
         </div>
         <div style={{ display: "inline-block", marginBottom: "12px" }}>
-          <CallToAction label={props.t("specific_meeting_confirmation_email_cancel_cta")} href={props.cancelLink} secondary />
+          <CallToAction
+            label={props.t("specific_meeting_confirmation_email_cancel_cta")}
+            href={props.cancelLink}
+            secondary
+          />
         </div>
       </div>
 

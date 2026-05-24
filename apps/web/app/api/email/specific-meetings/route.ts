@@ -1,9 +1,8 @@
-import { defaultResponderForAppDir } from "app/api/defaultResponderForAppDir";
-import { NextRequest, NextResponse } from "next/server";
-
 import renderEmail from "@calcom/emails/src/renderEmail";
 import { getTranslation } from "@calcom/i18n/server";
 import { IS_PRODUCTION } from "@calcom/lib/constants";
+import { defaultResponderForAppDir } from "app/api/defaultResponderForAppDir";
+import { type NextRequest, NextResponse } from "next/server";
 
 async function getHandler(request: NextRequest) {
   if (IS_PRODUCTION) {
@@ -35,8 +34,14 @@ async function getHandler(request: NextRequest) {
   if (template === "confirmation") {
     emailHtml = await renderEmail("SpecificMeetingConfirmationEmail", {
       ...common,
-      cancelLink: "http://localhost:3000/booking/booking_demo?cancel=true&cancelledBy=clean-invitee%40local.dev",
+      cancelLink:
+        "http://localhost:3000/booking/booking_demo?cancel=true&cancelledBy=clean-invitee%40local.dev",
       rescheduleLink: "http://localhost:3000/reschedule/booking_demo?rescheduledBy=clean-invitee%40local.dev",
+      inviteeStatuses: [
+        { name: "Clean Invitee", status: "ACCEPTED" },
+        { name: "Second Invitee", status: "PENDING" },
+        { name: "Third Invitee", status: "DECLINED" },
+      ],
     });
   } else if (template === "cancelled") {
     emailHtml = await renderEmail("SpecificMeetingCancelledEmail", common);
