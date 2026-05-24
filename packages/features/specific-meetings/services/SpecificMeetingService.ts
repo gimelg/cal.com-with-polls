@@ -16,7 +16,7 @@ import { ErrorWithCode } from "@calcom/lib/errors";
 import type { Prisma } from "@calcom/prisma/client";
 import { CreationSource, SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
-import { sendSpecificMeetingBookingFailedEmail, sendSpecificMeetingConfirmationEmail } from "@calcom/emails/poll-email-service";
+import { sendSpecificMeetingBookingFailedEmail } from "@calcom/emails/poll-email-service";
 import { SpecificMeetingRepository } from "../repositories/SpecificMeetingRepository";
 
 type CreateSpecificMeetingInput = {
@@ -79,7 +79,7 @@ export class SpecificMeetingService {
           return;
         }
 
-        await this.sendConfirmationEmails(meeting, booking.uid);
+        return;
       })
     );
   }
@@ -276,10 +276,6 @@ export class SpecificMeetingService {
       responseToken: input.responseToken,
     });
 
-    if (status === SpecificMeetingInviteeStatus.ACCEPTED && bookingUid) {
-      await this.sendConfirmationEmails(updatedMeeting, bookingUid);
-    }
-
     await this.cancelBookingIfNoParticipantsRemain(updatedMeeting);
 
     return updatedMeeting;
@@ -403,40 +399,6 @@ export class SpecificMeetingService {
       hideBranding,
       t,
     });
-  }
-
-  private async sendConfirmationEmails(meeting: InviteeMeeting, bookingUid: string) {
-    const t = await getTranslation("en", "common");
-    const meetingTime = new Intl.DateTimeFormat("en", {
-      dateStyle: "long",
-      timeStyle: "short",
-      timeZone: meeting.timeZone,
-    }).format(new Date(meeting.startTime));
-
-    let hideBranding = false;
-    try {
-      hideBranding = await getHideBranding({ userId: meeting.organizer.id });
-    } catch {}
-
-    await Promise.allSettled(
-      meeting.invitees
-        .filter((currentInvitee) => currentInvitee.status === SpecificMeetingInviteeStatus.ACCEPTED)
-        .map(async (currentInvitee) => {
-          await sendSpecificMeetingConfirmationEmail({
-            to: currentInvitee.email,
-            organizerName: meeting.organizer.name || meeting.organizer.email,
-            participantName: currentInvitee.name,
-            meetingTitle: meeting.title,
-            meetingDescription: meeting.description,
-            meetingTime,
-            meetingLink: new URL(`/meeting/${meeting.uid}?token=${currentInvitee.responseToken}`, WEBAPP_URL).toString(),
-            cancelLink: new URL(`/booking/${bookingUid}?cancel=true&cancelledBy=${encodeURIComponent(currentInvitee.email)}`, WEBAPP_URL).toString(),
-            rescheduleLink: new URL(`/reschedule/${bookingUid}?rescheduledBy=${encodeURIComponent(currentInvitee.email)}`, WEBAPP_URL).toString(),
-            hideBranding,
-            t,
-          });
-        })
-    );
   }
 
   private resolveLocationValue(locations: Prisma.JsonValue | null) {
