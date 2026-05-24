@@ -4,7 +4,6 @@ import { SpecificMeetingService } from "./SpecificMeetingService";
 
 const createBookingMock = vi.fn();
 const handleCancelBookingMock = vi.fn();
-const sendSpecificMeetingConfirmationEmailMock = vi.fn();
 const sendSpecificMeetingBookingFailedEmailMock = vi.fn();
 
 vi.mock("@calcom/features/bookings/di/RegularBookingService.container", () => ({
@@ -18,7 +17,6 @@ vi.mock("@calcom/features/bookings/lib/handleCancelBooking", () => ({
 }));
 
 vi.mock("@calcom/emails/poll-email-service", () => ({
-  sendSpecificMeetingConfirmationEmail: (...args: unknown[]) => sendSpecificMeetingConfirmationEmailMock(...args),
   sendSpecificMeetingBookingFailedEmail: (...args: unknown[]) => sendSpecificMeetingBookingFailedEmailMock(...args),
 }));
 

@@ -1,5 +1,5 @@
 // biome-ignore-all lint/nursery/useExplicitType: Router types are inferred from the procedure builders.
-import { sendSpecificMeetingCancelledEmail, sendSpecificMeetingInviteEmail } from "@calcom/emails/poll-email-service";
+import { sendSpecificMeetingInviteEmail } from "@calcom/emails/poll-email-service";
 import { getHideBranding } from "@calcom/features/profile/lib/hideBranding";
 import { SpecificMeetingService } from "@calcom/features/specific-meetings/services/SpecificMeetingService";
 import { getTranslation } from "@calcom/i18n/server";
@@ -91,38 +91,6 @@ const sendInviteForMeetingInvitee = async ({
   });
 };
 
-const sendCancellationForMeetingInvitee = async ({
-  meeting,
-  invitee,
-  user,
-}: {
-  meeting: Awaited<ReturnType<SpecificMeetingService["getForOrganizer"]>>;
-  invitee: Awaited<ReturnType<SpecificMeetingService["getForOrganizer"]>>["invitees"][number];
-  user: {
-    id: number;
-    name?: string | null;
-    email: string;
-    locale?: string | null;
-    hideBranding?: boolean;
-    organization?: { hideBranding?: boolean } | null;
-  };
-}) => {
-  const { organizerName, hideBranding, t } = await getEmailContext(user);
-  const meetingTime = getMeetingTime(meeting, user.locale);
-
-  await sendSpecificMeetingCancelledEmail({
-    to: invitee.email,
-    organizerName,
-    participantName: invitee.name,
-    meetingTitle: meeting.title,
-    meetingDescription: meeting.description,
-    meetingTime,
-    meetingLink: getMeetingLink(meeting.uid, invitee.responseToken),
-    hideBranding,
-    t,
-  });
-};
-
 export const specificMeetingsRouter = router({
   listByEventType: authedProcedure
     .input(
@@ -201,16 +169,6 @@ export const specificMeetingsRouter = router({
         organizerEmail: ctx.user.email,
         organizerUuid: ctx.user.uuid,
       });
-
-      await Promise.allSettled(
-        (meeting.invitees ?? []).map(async (invitee) => {
-          await sendCancellationForMeetingInvitee({
-            meeting,
-            invitee,
-            user: ctx.user,
-          });
-        })
-      );
 
       return meeting;
     }),
