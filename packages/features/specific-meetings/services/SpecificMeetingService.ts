@@ -30,6 +30,38 @@ type CreateSpecificMeetingInput = {
   participants: Array<{ name: string; email: string }>;
 };
 
+type InviteeMeeting = {
+  id: number;
+  uid: string;
+  title: string;
+  description: string | null;
+  timeZone: string;
+  startTime: Date;
+  endTime: Date;
+  status: SpecificMeetingStatus;
+  bookingId: number | null;
+  bookingFailureReason: string | null;
+  bookingFailureNotifiedAt: Date | null;
+  organizer: {
+    id: number;
+    uuid: string;
+    name: string | null;
+    email: string;
+  };
+  eventType: {
+    id: number;
+    locations: Prisma.JsonValue | null;
+  };
+  invitees: Array<{
+    id: number;
+    name: string;
+    email: string;
+    responseToken: string;
+    status: SpecificMeetingInviteeStatus;
+    respondedAt: Date | null;
+  }>;
+};
+
 export class SpecificMeetingService {
   private readonly repository: SpecificMeetingRepository;
 
@@ -253,7 +285,7 @@ export class SpecificMeetingService {
     return updatedMeeting;
   }
 
-  private async tryCreateBookingForMeeting(meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>) {
+  private async tryCreateBookingForMeeting(meeting: InviteeMeeting) {
     try {
       const [primaryInvitee, ...guestInvitees] = meeting.invitees;
       const locationValue = this.resolveLocationValue(meeting.eventType.locations);
@@ -320,9 +352,7 @@ export class SpecificMeetingService {
     }
   }
 
-  private async cancelBookingIfNoParticipantsRemain(
-    meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>
-  ) {
+  private async cancelBookingIfNoParticipantsRemain(meeting: InviteeMeeting) {
     if (!meeting.bookingId || meeting.status === SpecificMeetingStatus.CANCELLED) {
       return;
     }
@@ -347,9 +377,7 @@ export class SpecificMeetingService {
     });
   }
 
-  private async sendBookingFailureEmail(
-    meeting: Awaited<ReturnType<SpecificMeetingRepository["findInviteeContext"]>> extends infer T ? NonNullable<T> : never
-  ) {
+  private async sendBookingFailureEmail(meeting: InviteeMeeting) {
     const t = await getTranslation("en", "common");
     const appsLink = new URL("/apps/installed", WEBAPP_URL).toString();
     const meetingLink = new URL(`/event-types/${meeting.eventType.id}?tabName=specificMeetings`, WEBAPP_URL).toString();
@@ -377,10 +405,7 @@ export class SpecificMeetingService {
     });
   }
 
-  private async sendConfirmationEmails(
-    meeting: Awaited<ReturnType<SpecificMeetingService["getInviteeView"]>>,
-    bookingUid: string
-  ) {
+  private async sendConfirmationEmails(meeting: InviteeMeeting, bookingUid: string) {
     const t = await getTranslation("en", "common");
     const meetingTime = new Intl.DateTimeFormat("en", {
       dateStyle: "long",
