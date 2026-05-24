@@ -5,9 +5,10 @@ import {
   isAttendeeInputRequired,
   OrganizerDefaultConferencingAppType,
 } from "@calcom/app-store/locations";
+import { sendSpecificMeetingBookingFailedEmail } from "@calcom/emails/poll-email-service";
 import { getRegularBookingService } from "@calcom/features/bookings/di/RegularBookingService.container";
-import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
 import type { CreateRegularBookingData } from "@calcom/features/bookings/lib/dto/types";
+import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
 import { getHideBranding } from "@calcom/features/profile/lib/hideBranding";
 import { getTranslation } from "@calcom/i18n/server";
 import { WEBAPP_URL } from "@calcom/lib/constants";
@@ -16,7 +17,6 @@ import { ErrorWithCode } from "@calcom/lib/errors";
 import type { Prisma } from "@calcom/prisma/client";
 import { CreationSource, SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
-import { sendSpecificMeetingBookingFailedEmail } from "@calcom/emails/poll-email-service";
 import { SpecificMeetingRepository } from "../repositories/SpecificMeetingRepository";
 
 type CreateSpecificMeetingInput = {
@@ -158,12 +158,7 @@ export class SpecificMeetingService {
     }));
   }
 
-  async cancel(input: {
-    uid: string;
-    organizerId: number;
-    organizerEmail: string;
-    organizerUuid: string;
-  }) {
+  async cancel(input: { uid: string; organizerId: number; organizerEmail: string; organizerUuid: string }) {
     const meeting = await this.repository.findOwnedByUid({
       uid: input.uid,
       organizerId: input.organizerId,
@@ -208,6 +203,66 @@ export class SpecificMeetingService {
         responseUrl: `/meeting/${cancelledMeeting.uid}?token=${invitee.responseToken}`,
       })),
     };
+  }
+
+  async delete(input: { uid: string; organizerId: number }) {
+    const meeting = await this.repository.findOwnedByUid(input);
+    if (!meeting) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Specific meeting not found");
+    }
+
+    const isPastMeeting = meeting.endTime < new Date();
+    const hasNoAcceptedInvitees = !meeting.invitees.some(
+      (invitee) => invitee.status === SpecificMeetingInviteeStatus.ACCEPTED
+    );
+    const allInviteesDeclined =
+      meeting.invitees.length > 0 &&
+      meeting.invitees.every((invitee) => invitee.status === SpecificMeetingInviteeStatus.DECLINED);
+
+    if (
+      meeting.status !== SpecificMeetingStatus.CANCELLED &&
+      !isPastMeeting &&
+      !(hasNoAcceptedInvitees && allInviteesDeclined)
+    ) {
+      throw new ErrorWithCode(
+        ErrorCode.BadRequest,
+        "Only cancelled, past, or no-meeting specific meetings can be deleted"
+      );
+    }
+
+    return await this.repository.deleteSpecificMeeting({ uid: input.uid });
+  }
+
+  async resendInvite(input: { uid: string; organizerId: number; inviteeId: number }) {
+    const meeting = await this.repository.findOwnedByUid({
+      uid: input.uid,
+      organizerId: input.organizerId,
+    });
+
+    if (!meeting) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Specific meeting not found");
+    }
+
+    const invitee = meeting.invitees.find((item) => item.id === input.inviteeId);
+    if (!invitee) {
+      throw new ErrorWithCode(ErrorCode.NotFound, "Invitee not found");
+    }
+
+    if (invitee.status === SpecificMeetingInviteeStatus.ACCEPTED) {
+      throw new ErrorWithCode(ErrorCode.BadRequest, "Accepted invitees cannot be resent");
+    }
+
+    if (invitee.status === SpecificMeetingInviteeStatus.DECLINED) {
+      await this.repository.resetInviteeForResend({
+        inviteeId: invitee.id,
+        responseToken: crypto.randomUUID(),
+      });
+    }
+
+    return await this.getForOrganizer({
+      uid: input.uid,
+      organizerId: input.organizerId,
+    });
   }
 
   async getInviteeView(input: { uid: string; responseToken: string }) {
@@ -259,10 +314,8 @@ export class SpecificMeetingService {
       status = SpecificMeetingInviteeStatus.ACCEPTED;
     }
 
-    let bookingUid: string | null = null;
     if (status === SpecificMeetingInviteeStatus.ACCEPTED && !meeting.bookingId) {
-      const booking = await this.tryCreateBookingForMeeting(meeting);
-      bookingUid = booking?.uid ?? null;
+      await this.tryCreateBookingForMeeting(meeting);
     }
 
     await this.repository.updateInviteeResponse({
@@ -326,7 +379,10 @@ export class SpecificMeetingService {
       });
 
       if (!booking?.id || !booking?.uid) {
-        throw new ErrorWithCode(ErrorCode.InternalServerError, "Specific meeting booking could not be created");
+        throw new ErrorWithCode(
+          ErrorCode.InternalServerError,
+          "Specific meeting booking could not be created"
+        );
       }
 
       await this.repository.attachBooking({
@@ -336,7 +392,10 @@ export class SpecificMeetingService {
 
       return booking;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Specific meeting booking could not be created";
+      let reason = "Specific meeting booking could not be created";
+      if (error instanceof Error) {
+        reason = error.message;
+      }
       const failedMeeting = await this.repository.markBookingFailure({ uid: meeting.uid, reason });
 
       if (!failedMeeting.bookingFailureNotifiedAt) {
@@ -376,7 +435,10 @@ export class SpecificMeetingService {
   private async sendBookingFailureEmail(meeting: InviteeMeeting) {
     const t = await getTranslation("en", "common");
     const appsLink = new URL("/apps/installed", WEBAPP_URL).toString();
-    const meetingLink = new URL(`/event-types/${meeting.eventType.id}?tabName=specificMeetings`, WEBAPP_URL).toString();
+    const meetingLink = new URL(
+      `/event-types/${meeting.eventType.id}?tabName=specificMeetings`,
+      WEBAPP_URL
+    ).toString();
     const meetingTime = new Intl.DateTimeFormat("en", {
       dateStyle: "long",
       timeStyle: "short",
