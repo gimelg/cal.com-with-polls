@@ -25,6 +25,8 @@ type ParticipantDraft = {
   email: string;
 };
 
+type MeetingUiStatus = "PENDING" | "SCHEDULED" | "NO_MEETING" | "CANCELLED";
+
 const toDateTimeLocalInputValue = (date: Date) => {
   const dateWithoutTimezoneOffset = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return dateWithoutTimezoneOffset.toISOString().slice(0, 16);
@@ -36,11 +38,34 @@ const createParticipantDraft = (id: number): ParticipantDraft => ({
   email: "",
 });
 
-const getStatusVariant = (status: MeetingItem["status"]) => {
+const getMeetingUiStatus = (meeting: MeetingItem): MeetingUiStatus => {
+  if (meeting.status === "CANCELLED") return "CANCELLED";
+  if (meeting.bookingId) return "SCHEDULED";
+  if (meeting.invitees.every((invitee) => invitee.status === "DECLINED")) return "NO_MEETING";
+  return "PENDING";
+};
+
+const getStatusVariant = (status: MeetingUiStatus) => {
   if (status === "SCHEDULED") return "green" as const;
+  if (status === "PENDING") return "yellow" as const;
   return "gray" as const;
 };
 
+const getStatusLabel = (status: MeetingUiStatus, t: ReturnType<typeof useLocale>["t"]) => {
+  if (status === "PENDING") return t("specific_meeting_status_pending");
+  if (status === "SCHEDULED") return t("specific_meeting_status_scheduled");
+  if (status === "NO_MEETING") return t("specific_meeting_status_no_meeting");
+  return t("cancelled");
+};
+
+const canDeleteMeeting = (meeting: MeetingItem) => {
+  const allInviteesDeclined =
+    meeting.invitees.length > 0 && meeting.invitees.every((invitee) => invitee.status === "DECLINED");
+
+  return meeting.status === "CANCELLED" || new Date(meeting.endTime) < new Date() || allInviteesDeclined;
+};
+
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: Keeping this tab in one component keeps the RSVP flow easier to follow.
 export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTabProps) => {
   const { t } = useLocale();
   const utils = trpc.useUtils();
@@ -80,6 +105,16 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
   const resendInviteMutation = trpc.viewer.specificMeetings.resendInvite.useMutation({
     onSuccess: () => {
       showToast(t("specific_meeting_invite_resent_successfully"), "success");
+    },
+    onError: (error) => {
+      showToast(error.message, "error");
+    },
+  });
+
+  const deleteMutation = trpc.viewer.specificMeetings.delete.useMutation({
+    onSuccess: async () => {
+      showToast(t("specific_meeting_deleted_successfully"), "success");
+      await utils.viewer.specificMeetings.listByEventType.invalidate({ eventTypeId: eventType.id });
     },
     onError: (error) => {
       showToast(error.message, "error");
@@ -162,7 +197,12 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
         </div>
 
         <div className="grid gap-4">
-          <TextField name="specificMeetingTitle" label={t("title")} value={title} onChange={(event) => setTitle(event.target.value)} />
+          <TextField
+            name="specificMeetingTitle"
+            label={t("title")}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+          />
           <TextAreaField
             name="description"
             label={t("description")}
@@ -233,58 +273,74 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
         ) : null}
 
         <div className="space-y-4">
-          {meetings?.map((meeting) => (
-            <div className="rounded-lg border border-subtle p-4" key={meeting.id}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-medium text-emphasis">{meeting.title}</p>
-                  <p className="text-sm text-subtle">
-                    {new Date(meeting.startTime).toLocaleString()} —{" "}
-                    {new Date(meeting.endTime).toLocaleString()}
-                  </p>
-                </div>
-                <Badge variant={getStatusVariant(meeting.status)}>{meeting.status}</Badge>
-              </div>
+          {meetings?.map((meeting) => {
+            const uiStatus = getMeetingUiStatus(meeting);
+            const canDelete = canDeleteMeeting(meeting);
 
-              {meeting.description ? <p className="mt-3 text-default">{meeting.description}</p> : null}
-
-              <div className="mt-4 flex justify-end">
-                <Button
-                  color="secondary"
-                  disabled={meeting.status === "CANCELLED"}
-                  loading={cancelMutation.isPending}
-                  onClick={() => cancelMutation.mutate({ uid: meeting.uid })}>
-                  {t("cancel")}
-                </Button>
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {meeting.invitees.map((invitee) => (
-                  <div
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-subtle px-3 py-2"
-                    key={invitee.id}>
-                    <div>
-                      <p className="text-default">
-                        {invitee.name} ({invitee.email})
-                      </p>
-                      <p className="text-sm text-subtle">{invitee.status}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button color="secondary" onClick={() => void copyInviteLink(invitee.responseUrl)}>
-                        {t("specific_meeting_copy_invite_link")}
-                      </Button>
-                      <Button
-                        color="secondary"
-                        loading={resendInviteMutation.isPending}
-                        onClick={() => resendInviteMutation.mutate({ uid: meeting.uid, inviteeId: invitee.id })}>
-                        {t("specific_meeting_resend_invite")}
-                      </Button>
-                    </div>
+            return (
+              <div className="rounded-lg border border-subtle p-4" key={meeting.id}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-emphasis">{meeting.title}</p>
+                    <p className="text-sm text-subtle">
+                      {new Date(meeting.startTime).toLocaleString()} —{" "}
+                      {new Date(meeting.endTime).toLocaleString()}
+                    </p>
                   </div>
-                ))}
+                  <Badge variant={getStatusVariant(uiStatus)}>{getStatusLabel(uiStatus, t)}</Badge>
+                </div>
+
+                {meeting.description ? <p className="mt-3 text-default">{meeting.description}</p> : null}
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button
+                    color="secondary"
+                    disabled={meeting.status === "CANCELLED"}
+                    loading={cancelMutation.isPending}
+                    onClick={() => cancelMutation.mutate({ uid: meeting.uid })}>
+                    {t("cancel")}
+                  </Button>
+                  {canDelete ? (
+                    <Button
+                      color="destructive"
+                      loading={deleteMutation.isPending}
+                      onClick={() => deleteMutation.mutate({ uid: meeting.uid })}>
+                      {t("delete")}
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {meeting.invitees.map((invitee) => (
+                    <div
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-subtle px-3 py-2"
+                      key={invitee.id}>
+                      <div>
+                        <p className="text-default">
+                          {invitee.name} ({invitee.email})
+                        </p>
+                        <p className="text-sm text-subtle">{invitee.status}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button color="secondary" onClick={() => void copyInviteLink(invitee.responseUrl)}>
+                          {t("specific_meeting_copy_invite_link")}
+                        </Button>
+                        <Button
+                          color="secondary"
+                          disabled={invitee.status === "ACCEPTED"}
+                          loading={resendInviteMutation.isPending}
+                          onClick={() =>
+                            resendInviteMutation.mutate({ uid: meeting.uid, inviteeId: invitee.id })
+                          }>
+                          {t("specific_meeting_resend_invite")}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

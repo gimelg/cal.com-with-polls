@@ -212,6 +212,15 @@ export class SpecificMeetingRepository {
     });
   }
 
+  async deleteSpecificMeeting(input: { uid: string }) {
+    return await prisma.specificMeeting.delete({
+      where: {
+        uid: input.uid,
+      },
+      select: specificMeetingSelect,
+    });
+  }
+
   async findInviteeContext(input: { uid: string; responseToken: string }) {
     return await prisma.specificMeeting.findFirst({
       where: {
@@ -278,6 +287,20 @@ export class SpecificMeetingRepository {
       data: {
         status: input.status,
         respondedAt: input.respondedAt,
+      },
+      select: specificMeetingInviteeSelect,
+    });
+  }
+
+  async resetInviteeForResend(input: { inviteeId: number; responseToken: string }) {
+    return await prisma.specificMeetingInvitee.update({
+      where: {
+        id: input.inviteeId,
+      },
+      data: {
+        status: "PENDING",
+        respondedAt: null,
+        responseToken: input.responseToken,
       },
       select: specificMeetingInviteeSelect,
     });

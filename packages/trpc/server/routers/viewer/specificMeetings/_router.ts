@@ -48,7 +48,10 @@ const getEmailContext = async (user: {
   return { organizerName, hideBranding, t };
 };
 
-const getMeetingTime = (meeting: Awaited<ReturnType<SpecificMeetingService["getForOrganizer"]>>, locale?: string | null) => {
+const getMeetingTime = (
+  meeting: Awaited<ReturnType<SpecificMeetingService["getForOrganizer"]>>,
+  locale?: string | null
+) => {
   return new Intl.DateTimeFormat(locale || "en", {
     dateStyle: "long",
     timeStyle: "short",
@@ -172,6 +175,19 @@ export const specificMeetingsRouter = router({
 
       return meeting;
     }),
+  delete: authedProcedure
+    .input(
+      z.object({
+        uid: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const service = new SpecificMeetingService();
+      return await service.delete({
+        uid: input.uid,
+        organizerId: ctx.user.id,
+      });
+    }),
   resendInvite: authedProcedure
     .input(
       z.object({
@@ -181,9 +197,10 @@ export const specificMeetingsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const service = new SpecificMeetingService();
-      const meeting = await service.getForOrganizer({
+      const meeting = await service.resendInvite({
         uid: input.uid,
         organizerId: ctx.user.id,
+        inviteeId: input.inviteeId,
       });
       const invitee = meeting.invitees.find((item) => item.id === input.inviteeId);
 
