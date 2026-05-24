@@ -14,6 +14,10 @@ export type SpecificMeetingConfirmationEmailInput = {
   meetingLink: string;
   cancelLink: string;
   rescheduleLink: string;
+  inviteeStatuses: Array<{
+    name: string;
+    status: "PENDING" | "ACCEPTED" | "DECLINED";
+  }>;
   hideBranding: boolean;
   t: TFunction;
 };
@@ -56,6 +60,9 @@ ${this.input.t(bodyKey, {
 
 ${this.input.t("specific_meeting_confirmation_email_reschedule_cta")}: ${this.input.rescheduleLink}
 ${this.input.t("specific_meeting_confirmation_email_cancel_cta")}: ${this.input.cancelLink}
+
+${this.input.t("specific_meeting_confirmation_email_invitee_statuses")}:
+${this.input.inviteeStatuses.map((invitee) => `- ${invitee.name}: ${this.input.t(`specific_meeting_invitee_status_${invitee.status.toLowerCase()}`)}`).join("\n")}
 
 ${this.input.meetingLink}`;
   }
