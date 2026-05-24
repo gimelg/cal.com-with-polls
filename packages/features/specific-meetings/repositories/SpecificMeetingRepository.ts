@@ -34,6 +34,7 @@ const specificMeetingSelect = {
     select: {
       id: true,
       uid: true,
+      status: true,
     },
   },
   organizer: {
@@ -249,6 +250,7 @@ export class SpecificMeetingRepository {
           select: {
             id: true,
             uid: true,
+            status: true,
           },
         },
         organizer: {

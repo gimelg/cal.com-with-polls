@@ -17,6 +17,7 @@ import { getTranslation } from "@calcom/i18n/server";
 import { WEBAPP_URL } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
+import { prisma } from "@calcom/prisma";
 import type { Prisma } from "@calcom/prisma/client";
 import { CreationSource, SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
@@ -391,6 +392,18 @@ export class SpecificMeetingService {
           "Specific meeting booking could not be created"
         );
       }
+
+      await prisma.booking.update({
+        where: {
+          id: booking.id,
+        },
+        data: {
+          title: meeting.title,
+        },
+        select: {
+          id: true,
+        },
+      });
 
       await this.repository.attachBooking({
         uid: meeting.uid,

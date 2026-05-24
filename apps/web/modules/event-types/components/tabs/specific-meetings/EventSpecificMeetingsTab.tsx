@@ -40,6 +40,7 @@ const createParticipantDraft = (id: number): ParticipantDraft => ({
 
 const getMeetingUiStatus = (meeting: MeetingItem): MeetingUiStatus => {
   if (meeting.status === "CANCELLED") return "CANCELLED";
+  if (meeting.booking?.status === "CANCELLED") return "CANCELLED";
   if (meeting.bookingId) return "SCHEDULED";
   if (meeting.invitees.every((invitee) => invitee.status === "DECLINED")) return "NO_MEETING";
   return "PENDING";
@@ -62,7 +63,12 @@ const canDeleteMeeting = (meeting: MeetingItem) => {
   const allInviteesDeclined =
     meeting.invitees.length > 0 && meeting.invitees.every((invitee) => invitee.status === "DECLINED");
 
-  return meeting.status === "CANCELLED" || new Date(meeting.endTime) < new Date() || allInviteesDeclined;
+  return (
+    meeting.status === "CANCELLED" ||
+    meeting.booking?.status === "CANCELLED" ||
+    new Date(meeting.endTime) < new Date() ||
+    allInviteesDeclined
+  );
 };
 
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: Keeping this tab in one component keeps the RSVP flow easier to follow.
