@@ -12,13 +12,15 @@ import {
 import { getRegularBookingService } from "@calcom/features/bookings/di/RegularBookingService.container";
 import type { CreateRegularBookingData } from "@calcom/features/bookings/lib/dto/types";
 import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
+import { validateBookingTimeIsNotOutOfBounds } from "@calcom/features/bookings/lib/handleNewBooking/validateBookingTimeIsNotOutOfBounds";
 import { getHideBranding } from "@calcom/features/profile/lib/hideBranding";
+import logger from "@calcom/lib/logger";
 import { getTranslation } from "@calcom/i18n/server";
 import { WEBAPP_URL } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
 import { prisma } from "@calcom/prisma";
-import type { Prisma } from "@calcom/prisma/client";
+import type { EventType, Prisma } from "@calcom/prisma/client";
 import { CreationSource, SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
 import { eventTypeLocations } from "@calcom/prisma/zod-utils";
 import { SpecificMeetingRepository } from "../repositories/SpecificMeetingRepository";
@@ -31,7 +33,7 @@ type CreateSpecificMeetingInput = {
   timeZone: string;
   startTime: Date;
   endTime: Date;
-  participants: Array<{ name: string; email: string }>;
+  participants: Array<{ name: string; email: string; required?: boolean }>;
 };
 
 type InviteeMeeting = {
@@ -54,14 +56,26 @@ type InviteeMeeting = {
   };
   eventType: {
     id: number;
+    title?: string;
+    eventName?: string | null;
+    periodType?: EventType["periodType"];
+    periodDays?: number | null;
+    periodEndDate?: Date | null;
+    periodStartDate?: Date | null;
+    periodCountCalendarDays?: boolean;
+    minimumBookingNotice?: number;
+    schedule?: { timeZone: string | null } | null;
+    user?: { defaultScheduleId: number | null; schedules: Array<{ id: number; timeZone: string | null }> } | null;
     locations: Prisma.JsonValue | null;
   };
+
   invitees: Array<{
     id: number;
     name: string;
     email: string;
     responseToken: string;
     status: SpecificMeetingInviteeStatus;
+    required: boolean;
     respondedAt: Date | null;
   }>;
 };
@@ -109,6 +123,7 @@ export class SpecificMeetingService {
     const normalizedParticipants = input.participants.map((participant) => ({
       name: participant.name.trim(),
       email: participant.email.trim().toLowerCase(),
+      required: Boolean(participant.required),
     }));
 
     const uniqueEmails = new Set(normalizedParticipants.map((participant) => participant.email));
@@ -117,6 +132,12 @@ export class SpecificMeetingService {
     }
 
     await this.resolveLocationValue(eventType.locations);
+
+    await this.validateMeetingTimeWithinEventBounds({
+      eventType,
+      startTime: input.startTime,
+      timeZone: input.timeZone,
+    });
 
     const meeting = await this.repository.createSpecificMeeting({
       organizerId: input.organizerId,
@@ -318,10 +339,6 @@ export class SpecificMeetingService {
       status = SpecificMeetingInviteeStatus.ACCEPTED;
     }
 
-    if (status === SpecificMeetingInviteeStatus.ACCEPTED && !meeting.bookingId) {
-      await this.tryCreateBookingForMeeting(meeting);
-    }
-
     await this.repository.updateInviteeResponse({
       inviteeId: invitee.id,
       status,
@@ -333,17 +350,30 @@ export class SpecificMeetingService {
       responseToken: input.responseToken,
     });
 
-    await this.cancelBookingIfNoParticipantsRemain(updatedMeeting);
-
-    if (status === SpecificMeetingInviteeStatus.ACCEPTED) {
-      await this.sendConfirmationEmailToAcceptedInvitee(updatedMeeting);
+    if (status === SpecificMeetingInviteeStatus.ACCEPTED && !updatedMeeting.bookingId) {
+      await this.tryCreateBookingForMeeting(updatedMeeting);
     }
 
-    return updatedMeeting;
+    const refreshedMeeting = await this.getInviteeView({
+      uid: input.uid,
+      responseToken: input.responseToken,
+    });
+
+    await this.cancelBookingIfNoParticipantsRemain(refreshedMeeting);
+
+    if (status === SpecificMeetingInviteeStatus.ACCEPTED) {
+      await this.sendConfirmationEmailToAcceptedInvitee(refreshedMeeting);
+    }
+
+    return refreshedMeeting;
   }
 
   private async tryCreateBookingForMeeting(meeting: InviteeMeeting) {
     try {
+      if (!this.shouldCreateBooking(meeting)) {
+        return null;
+      }
+
       const [primaryInvitee, ...guestInvitees] = meeting.invitees;
       const locationValue = this.resolveLocationValue(meeting.eventType.locations);
       const responses: Record<string, unknown> = {
@@ -372,6 +402,7 @@ export class SpecificMeetingService {
         metadata: {
           specificMeetingId: String(meeting.id),
           specificMeetingUid: meeting.uid,
+          specificMeetingInviteeCount: String(meeting.invitees.length),
         },
         responses,
         noEmail: false,
@@ -399,6 +430,16 @@ export class SpecificMeetingService {
         },
         data: {
           title: meeting.title,
+          attendees: {
+            updateMany: meeting.invitees.map((invitee) => ({
+              where: {
+                email: invitee.email,
+              },
+              data: {
+                name: invitee.name,
+              },
+            })),
+          },
         },
         select: {
           id: true,
@@ -468,13 +509,16 @@ export class SpecificMeetingService {
 
     const bookingLink = new URL(`/booking/${meeting.booking.uid}`, WEBAPP_URL).toString();
     const cancelLink = new URL(
-      `/booking/${meeting.booking.uid}?cancel=true&cancelledBy=${encodeURIComponent(meeting.invitee.email)}`,
+      `/meeting/${meeting.uid}?token=${encodeURIComponent(meeting.invitee.responseToken)}&response=DECLINED`,
       WEBAPP_URL
     ).toString();
-    const rescheduleLink = new URL(
-      `/reschedule/${meeting.booking.uid}?rescheduledBy=${encodeURIComponent(meeting.invitee.email)}`,
-      WEBAPP_URL
-    ).toString();
+    const rescheduleLink =
+      meeting.invitees.length === 1
+        ? new URL(
+            `/reschedule/${meeting.booking.uid}?rescheduledBy=${encodeURIComponent(meeting.invitee.email)}`,
+            WEBAPP_URL
+          ).toString()
+        : "";
 
     let hideBranding = false;
     try {
@@ -495,6 +539,7 @@ export class SpecificMeetingService {
         name: invitee.name,
         status: invitee.status,
       })),
+      showRescheduleLink: Boolean(rescheduleLink),
       hideBranding,
       t,
     });
@@ -529,6 +574,44 @@ export class SpecificMeetingService {
       hideBranding,
       t,
     });
+  }
+
+  private shouldCreateBooking(meeting: InviteeMeeting) {
+    const requiredInvitees = meeting.invitees.filter((invitee) => invitee.required);
+    if (requiredInvitees.length > 0) {
+      return requiredInvitees.every((invitee) => invitee.status === SpecificMeetingInviteeStatus.ACCEPTED);
+    }
+
+    return meeting.invitees.some((invitee) => invitee.status === SpecificMeetingInviteeStatus.ACCEPTED);
+  }
+
+  private async validateMeetingTimeWithinEventBounds(input: {
+    eventType: NonNullable<Awaited<ReturnType<SpecificMeetingRepository["findOwnedEventType"]>>>;
+    startTime: Date;
+    timeZone: string;
+  }) {
+    const eventTimeZone =
+      input.eventType.schedule?.timeZone ??
+      input.eventType.user?.schedules.find((schedule) => schedule.id === input.eventType.user?.defaultScheduleId)
+        ?.timeZone;
+
+    await validateBookingTimeIsNotOutOfBounds(
+      input.startTime.toISOString(),
+      input.timeZone,
+      {
+        id: input.eventType.id,
+        title: input.eventType.title,
+        eventName: input.eventType.title,
+        minimumBookingNotice: input.eventType.minimumBookingNotice,
+        periodType: input.eventType.periodType,
+        periodDays: input.eventType.periodDays,
+        periodEndDate: input.eventType.periodEndDate,
+        periodStartDate: input.eventType.periodStartDate,
+        periodCountCalendarDays: input.eventType.periodCountCalendarDays,
+      },
+      eventTimeZone,
+      logger
+    );
   }
 
   private resolveLocationValue(locations: Prisma.JsonValue | null) {

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const specificMeetingServiceMock = {
   listByEventType: vi.fn(),
   getForOrganizer: vi.fn(),
+  resendInvite: vi.fn(),
   cancel: vi.fn(),
 };
 
@@ -15,6 +16,7 @@ vi.mock("@calcom/features/specific-meetings/services/SpecificMeetingService", ()
   SpecificMeetingService: class {
     listByEventType = specificMeetingServiceMock.listByEventType;
     getForOrganizer = specificMeetingServiceMock.getForOrganizer;
+    resendInvite = specificMeetingServiceMock.resendInvite;
     cancel = specificMeetingServiceMock.cancel;
   },
 }));
@@ -59,7 +61,7 @@ describe("viewer specific meetings router", () => {
   });
 
   it("resends an invite for a specific invitee", async () => {
-    specificMeetingServiceMock.getForOrganizer.mockResolvedValue({
+    specificMeetingServiceMock.resendInvite.mockResolvedValue({
       uid: "sm_1",
       title: "Planning",
       description: null,

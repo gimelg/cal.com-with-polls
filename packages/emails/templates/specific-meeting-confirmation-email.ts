@@ -14,6 +14,7 @@ export type SpecificMeetingConfirmationEmailInput = {
   meetingLink: string;
   cancelLink: string;
   rescheduleLink: string;
+  showRescheduleLink: boolean;
   inviteeStatuses: Array<{
     name: string;
     status: "PENDING" | "ACCEPTED" | "DECLINED";
@@ -58,8 +59,7 @@ ${this.input.t(bodyKey, {
   appName: "Cal.com",
 })}
 
-${this.input.t("specific_meeting_confirmation_email_reschedule_cta")}: ${this.input.rescheduleLink}
-${this.input.t("specific_meeting_confirmation_email_cancel_cta")}: ${this.input.cancelLink}
+${this.input.showRescheduleLink ? `${this.input.t("specific_meeting_confirmation_email_reschedule_cta")}: ${this.input.rescheduleLink}\n` : ""}${this.input.t("specific_meeting_confirmation_email_cancel_cta")}: ${this.input.cancelLink}
 
 ${this.input.t("specific_meeting_confirmation_email_invitee_statuses")}:
 ${this.input.inviteeStatuses.map((invitee) => `- ${invitee.name}: ${this.input.t(`specific_meeting_invitee_status_${invitee.status.toLowerCase()}`)}`).join("\n")}

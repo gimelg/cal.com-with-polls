@@ -106,6 +106,8 @@ export function getEditEventActions(context: BookingActionContext): ActionType[]
     t,
   } = context;
   const seatReferenceUid = getSeatReferenceUid();
+  const specificMeetingInviteeCount = Number(booking.metadata?.specificMeetingInviteeCount || 0);
+  const isMultiInviteeSpecificMeeting = specificMeetingInviteeCount > 1;
 
   const isReassignableRoundRobin =
     booking.eventType.schedulingType === SchedulingType.ROUND_ROBIN &&
@@ -123,12 +125,14 @@ export function getEditEventActions(context: BookingActionContext): ActionType[]
           ? `?seatReferenceUid=${seatReferenceUid}`
           : ""
       }`,
-      disabled: isActionDisabled("reschedule", {
-        ...context,
-        booking,
-        isBookingInPast,
-        isDisabledRescheduling,
-      }),
+      disabled:
+        (isAttendee && isMultiInviteeSpecificMeeting) ||
+        isActionDisabled("reschedule", {
+          ...context,
+          booking,
+          isBookingInPast,
+          isDisabledRescheduling,
+        }),
     },
     {
       id: "reschedule_request",
@@ -136,6 +140,7 @@ export function getEditEventActions(context: BookingActionContext): ActionType[]
       iconClassName: "rotate-45 w-[16px] -translate-x-0.5 ",
       label: t("send_reschedule_request"),
       disabled:
+        (isAttendee && isMultiInviteeSpecificMeeting) ||
         isActionDisabled("reschedule_request", {
           ...context,
           booking,

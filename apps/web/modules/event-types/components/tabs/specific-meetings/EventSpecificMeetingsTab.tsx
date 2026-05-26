@@ -10,7 +10,7 @@ import { Badge } from "@calcom/ui/components/badge";
 import type { BadgeProps } from "@calcom/ui/components/badge";
 import { Button } from "@calcom/ui/components/button";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
-import { TextAreaField, TextField } from "@calcom/ui/components/form";
+import { Checkbox, TextAreaField, TextField } from "@calcom/ui/components/form";
 import { showToast } from "@calcom/ui/components/toast";
 import { useState } from "react";
 
@@ -24,6 +24,7 @@ type ParticipantDraft = {
   id: number;
   name: string;
   email: string;
+  required: boolean;
 };
 
 type MeetingUiStatus = "PENDING" | "SCHEDULED" | "NO_MEETING" | "CANCELLED";
@@ -37,6 +38,7 @@ const createParticipantDraft = (id: number): ParticipantDraft => ({
   id,
   name: "",
   email: "",
+  required: false,
 });
 
 const getMeetingUiStatus = (meeting: MeetingItem): MeetingUiStatus => {
@@ -135,12 +137,39 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
     });
   };
 
-  const updateParticipant = (participantId: number, field: "name" | "email", value: string) => {
+  const updateParticipant = (
+    participantId: number,
+    field: "name" | "email" | "required",
+    value: string | boolean
+  ) => {
     setParticipants((previous) =>
       previous.map((participant) =>
         participant.id === participantId ? { ...participant, [field]: value } : participant
       )
     );
+  };
+
+  const setRequireAll = (required: boolean) => {
+    setParticipants((previous) => previous.map((participant) => ({ ...participant, required })));
+  };
+
+  const duplicateMeeting = (meeting: MeetingItem) => {
+    setTitle(meeting.title);
+    setDescription(meeting.description || "");
+    setParticipants(
+      meeting.invitees.map((invitee, index) => ({
+        id: index + 1,
+        name: invitee.name,
+        email: invitee.email,
+        required: Boolean(invitee.required),
+      }))
+    );
+
+    const nextStartTime = new Date(meeting.startTime);
+    nextStartTime.setDate(nextStartTime.getDate() + 1);
+    setStartTime(toDateTimeLocalInputValue(nextStartTime));
+
+    showToast(t("specific_meeting_duplicated_to_form"), "success");
   };
 
   const removeParticipant = (participantId: number) => {
@@ -158,6 +187,7 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
       .map((participant) => ({
         name: participant.name.trim(),
         email: participant.email.trim().toLowerCase(),
+        required: participant.required,
       }))
       .filter((participant) => participant.name && participant.email);
 
@@ -232,6 +262,13 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
               {t("add_participant")}
             </Button>
           </div>
+          {participants.length > 1 ? (
+            <div className="flex justify-end">
+              <Button color="secondary" onClick={() => setRequireAll(true)}>
+                {t("specific_meeting_require_all")}
+              </Button>
+            </div>
+          ) : null}
           {participants.map((participant) => (
             <div
               className="grid gap-3 rounded-lg border border-subtle p-4 md:grid-cols-[1fr_1fr_auto]"
@@ -248,7 +285,18 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
                 value={participant.email}
                 onChange={(event) => updateParticipant(participant.id, "email", event.target.value)}
               />
-              <div className="flex items-end">
+              <div className="flex items-end gap-3">
+                {participants.length > 1 ? (
+                  <label className="mb-2 flex items-center gap-2 text-sm text-default">
+                    <Checkbox
+                      checked={participant.required}
+                      onCheckedChange={(checked) =>
+                        updateParticipant(participant.id, "required", checked === true)
+                      }
+                    />
+                    {t("specific_meeting_require_acceptance")}
+                  </label>
+                ) : null}
                 <Button color="secondary" onClick={() => removeParticipant(participant.id)}>
                   {t("remove")}
                 </Button>
@@ -300,6 +348,9 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
                 {meeting.description ? <p className="mt-3 text-default">{meeting.description}</p> : null}
 
                 <div className="mt-4 flex justify-end gap-2">
+                  <Button color="secondary" onClick={() => duplicateMeeting(meeting)}>
+                    {t("duplicate")}
+                  </Button>
                   <Button
                     color="secondary"
                     disabled={meeting.status === "CANCELLED"}
@@ -326,7 +377,10 @@ export const EventSpecificMeetingsTab = ({ eventType }: EventSpecificMeetingsTab
                         <p className="text-default">
                           {invitee.name} ({invitee.email})
                         </p>
-                        <p className="text-sm text-subtle">{invitee.status}</p>
+                        <p className="text-sm text-subtle">
+                          {invitee.status}
+                          {invitee.required ? ` • ${t("specific_meeting_required")}` : ""}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <Button color="secondary" onClick={() => void copyInviteLink(invitee.responseUrl)}>

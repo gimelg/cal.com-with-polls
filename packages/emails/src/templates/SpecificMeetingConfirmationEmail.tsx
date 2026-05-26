@@ -13,6 +13,7 @@ export type SpecificMeetingConfirmationEmailProps = {
   meetingLink: string;
   cancelLink: string;
   rescheduleLink: string;
+  showRescheduleLink: boolean;
   inviteeStatuses: Array<{
     name: string;
     status: "PENDING" | "ACCEPTED" | "DECLINED";
@@ -78,13 +79,15 @@ export const SpecificMeetingConfirmationEmail = (
       <hr style={{ marginTop: "24px", marginBottom: "24px" }} />
 
       <div>
-        <div style={{ display: "inline-block", marginRight: "12px", marginBottom: "12px" }}>
-          <CallToAction
-            label={props.t("specific_meeting_confirmation_email_reschedule_cta")}
-            href={props.rescheduleLink}
-            secondary
-          />
-        </div>
+        {props.showRescheduleLink ? (
+          <div style={{ display: "inline-block", marginRight: "12px", marginBottom: "12px" }}>
+            <CallToAction
+              label={props.t("specific_meeting_confirmation_email_reschedule_cta")}
+              href={props.rescheduleLink}
+              secondary
+            />
+          </div>
+        ) : null}
         <div style={{ display: "inline-block", marginBottom: "12px" }}>
           <CallToAction
             label={props.t("specific_meeting_confirmation_email_cancel_cta")}

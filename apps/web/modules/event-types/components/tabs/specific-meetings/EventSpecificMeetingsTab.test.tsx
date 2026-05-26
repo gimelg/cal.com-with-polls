@@ -8,6 +8,7 @@ const listByEventTypeUseQueryMock = vi.fn();
 const createMutateMock = vi.fn();
 const cancelMutateMock = vi.fn();
 const resendInviteMutateMock = vi.fn();
+const deleteMutateMock = vi.fn();
 const copyTextMock = vi.fn();
 const showToastMock = vi.fn();
 
@@ -42,6 +43,9 @@ vi.mock("@calcom/trpc/react", () => ({
         resendInvite: {
           useMutation: () => ({ mutate: resendInviteMutateMock, isPending: false }),
         },
+        delete: {
+          useMutation: () => ({ mutate: deleteMutateMock, isPending: false }),
+        },
       },
     },
   },
@@ -64,6 +68,9 @@ vi.mock("@calcom/ui/components/empty-screen", () => ({
 }));
 
 vi.mock("@calcom/ui/components/form", () => ({
+  Checkbox: ({ checked, onCheckedChange }: { checked?: boolean; onCheckedChange?: (checked: boolean) => void }) => (
+    <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange?.(event.target.checked)} />
+  ),
   TextField: ({ label, value, onChange }: ComponentProps<"input"> & { label: string }) => (
     <label>
       {label}
@@ -94,6 +101,7 @@ describe("EventSpecificMeetingsTab", () => {
     createMutateMock.mockReset();
     cancelMutateMock.mockReset();
     resendInviteMutateMock.mockReset();
+    deleteMutateMock.mockReset();
     showToastMock.mockReset();
     copyTextMock.mockReset();
     vi.stubGlobal("navigator", {
