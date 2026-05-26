@@ -11,6 +11,7 @@ import { router } from "../../../trpc";
 const participantSchema = z.object({
   name: z.string().trim().min(1),
   email: z.string().email(),
+  required: z.boolean().optional(),
 });
 
 const shouldHideBrandingForOrganizer = async (user: {

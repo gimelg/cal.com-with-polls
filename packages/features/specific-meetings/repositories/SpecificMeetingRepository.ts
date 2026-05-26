@@ -9,6 +9,7 @@ const specificMeetingInviteeSelect = {
   email: true,
   responseToken: true,
   status: true,
+  required: true,
   respondedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -81,6 +82,28 @@ export class SpecificMeetingRepository {
         length: true,
         locations: true,
         userId: true,
+        minimumBookingNotice: true,
+        periodType: true,
+        periodDays: true,
+        periodEndDate: true,
+        periodStartDate: true,
+        periodCountCalendarDays: true,
+        schedule: {
+          select: {
+            timeZone: true,
+          },
+        },
+        user: {
+          select: {
+            defaultScheduleId: true,
+            schedules: {
+              select: {
+                id: true,
+                timeZone: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -93,7 +116,7 @@ export class SpecificMeetingRepository {
     timeZone: string;
     startTime: Date;
     endTime: Date;
-    invitees: Array<{ name: string; email: string }>;
+    invitees: Array<{ name: string; email: string; required: boolean }>;
   }) {
     return await prisma.specificMeeting.create({
       data: {
@@ -108,6 +131,7 @@ export class SpecificMeetingRepository {
           create: input.invitees.map((invitee) => ({
             name: invitee.name,
             email: invitee.email,
+            required: invitee.required,
           })),
         },
       },

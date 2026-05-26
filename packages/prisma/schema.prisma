@@ -1015,6 +1015,7 @@ model SpecificMeetingInvitee {
   email             String
   responseToken     String                       @unique @default(cuid())
   status            SpecificMeetingInviteeStatus @default(PENDING)
+  required          Boolean                      @default(false)
   respondedAt       DateTime?
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime?                    @updatedAt
