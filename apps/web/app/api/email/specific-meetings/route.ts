@@ -37,6 +37,7 @@ async function getHandler(request: NextRequest) {
       cancelLink:
         "http://localhost:3000/booking/booking_demo?cancel=true&cancelledBy=clean-invitee%40local.dev",
       rescheduleLink: "http://localhost:3000/reschedule/booking_demo?rescheduledBy=clean-invitee%40local.dev",
+      showRescheduleLink: true,
       inviteeStatuses: [
         { name: "Clean Invitee", status: "ACCEPTED" },
         { name: "Second Invitee", status: "PENDING" },

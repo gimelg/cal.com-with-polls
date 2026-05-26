@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
-import { SpecificMeetingService } from "./SpecificMeetingService";
 
 const createBookingMock = vi.fn();
 const handleCancelBookingMock = vi.fn();
 const sendSpecificMeetingBookingFailedEmailMock = vi.fn();
+const bookingUpdateMock = vi.fn();
+
+vi.mock("@calcom/prisma", () => ({
+  prisma: {
+    booking: {
+      update: (...args: unknown[]) => bookingUpdateMock(...args),
+    },
+  },
+}));
 
 vi.mock("@calcom/features/bookings/di/RegularBookingService.container", () => ({
   getRegularBookingService: () => ({
@@ -18,9 +26,23 @@ vi.mock("@calcom/features/bookings/lib/handleCancelBooking", () => ({
 
 vi.mock("@calcom/emails/poll-email-service", () => ({
   sendSpecificMeetingBookingFailedEmail: (...args: unknown[]) => sendSpecificMeetingBookingFailedEmailMock(...args),
+  sendSpecificMeetingConfirmationEmail: vi.fn(),
 }));
 
+vi.mock("@calcom/features/profile/lib/hideBranding", () => ({
+  getHideBranding: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("@calcom/i18n/server", () => ({
+  getTranslation: vi.fn().mockResolvedValue((key: string) => key),
+}));
+
+import { SpecificMeetingService } from "./SpecificMeetingService";
+
 describe("SpecificMeetingService", () => {
+  const futureStartTime = new Date("2027-04-01T10:00:00.000Z");
+  const futureEndTime = new Date("2027-04-01T10:30:00.000Z");
+
   const repository = {
     findOwnedEventType: vi.fn(),
     createSpecificMeeting: vi.fn(),
@@ -39,6 +61,7 @@ describe("SpecificMeetingService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    bookingUpdateMock.mockResolvedValue({ id: 222 });
   });
 
   it("creates a meeting without creating a booking yet", async () => {
@@ -49,6 +72,14 @@ describe("SpecificMeetingService", () => {
       length: 30,
       locations: [],
       userId: 10,
+      minimumBookingNotice: 0,
+      periodType: "UNLIMITED",
+      periodDays: null,
+      periodEndDate: null,
+      periodStartDate: null,
+      periodCountCalendarDays: false,
+      schedule: { timeZone: "UTC" },
+      owner: { defaultScheduleId: null, schedules: [] },
     });
     repository.createSpecificMeeting.mockResolvedValue({
       id: 1,
@@ -56,16 +87,27 @@ describe("SpecificMeetingService", () => {
       title: "Planning",
       description: null,
       timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
+      startTime: futureStartTime,
+      endTime: futureEndTime,
       status: SpecificMeetingStatus.SCHEDULED,
       createdAt: new Date(),
       updatedAt: new Date(),
       bookingId: null,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
       eventType: { id: 100, title: "1:1", slug: "one-on-one", length: 30, locations: [], userId: 10 },
       invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: "PENDING", respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 11,
+          uid: "inv_1",
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: "PENDING",
+          required: false,
+          respondedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ],
     });
     repository.findOwnedByUid.mockResolvedValue({
@@ -74,16 +116,27 @@ describe("SpecificMeetingService", () => {
       title: "Planning",
       description: null,
       timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
+      startTime: futureStartTime,
+      endTime: futureEndTime,
       status: SpecificMeetingStatus.SCHEDULED,
       createdAt: new Date(),
       updatedAt: new Date(),
       bookingId: null,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
       eventType: { id: 100, title: "1:1", slug: "one-on-one", length: 30, locations: [], userId: 10 },
       invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: "PENDING", respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 11,
+          uid: "inv_1",
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: "PENDING",
+          required: false,
+          respondedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ],
     });
 
@@ -93,11 +146,9 @@ describe("SpecificMeetingService", () => {
       title: "Planning",
       description: undefined,
       timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
-      participants: [
-        { name: "Alex", email: "ALEX@example.com" },
-      ],
+      startTime: futureStartTime,
+      endTime: futureEndTime,
+      participants: [{ name: "Alex", email: "ALEX@example.com" }],
     });
 
     expect(repository.createSpecificMeeting).toHaveBeenCalledWith(
@@ -105,7 +156,7 @@ describe("SpecificMeetingService", () => {
         organizerId: 10,
         eventTypeId: 100,
         title: "Planning",
-        invitees: [{ name: "Alex", email: "alex@example.com" }],
+        invitees: [{ name: "Alex", email: "alex@example.com", required: false }],
       })
     );
     expect(createBookingMock).not.toHaveBeenCalled();
@@ -120,16 +171,27 @@ describe("SpecificMeetingService", () => {
       title: "Planning",
       description: null,
       timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
+      startTime: futureStartTime,
+      endTime: futureEndTime,
       status: SpecificMeetingStatus.SCHEDULED,
       createdAt: new Date(),
       updatedAt: new Date(),
       bookingId: 222,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
       eventType: { id: 100, title: "1:1", slug: "one-on-one", length: 30, locations: [], userId: 10 },
       invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: "PENDING", respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 11,
+          uid: "inv_1",
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: "PENDING",
+          required: false,
+          respondedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ],
     });
     repository.cancelSpecificMeeting.mockResolvedValue({
@@ -138,17 +200,28 @@ describe("SpecificMeetingService", () => {
       title: "Planning",
       description: null,
       timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
+      startTime: futureStartTime,
+      endTime: futureEndTime,
       status: SpecificMeetingStatus.CANCELLED,
       createdAt: new Date(),
       updatedAt: new Date(),
       cancelledAt: new Date(),
       bookingId: 222,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
       eventType: { id: 100, title: "1:1", slug: "one-on-one", length: 30, locations: [], userId: 10 },
       invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: "PENDING", respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 11,
+          uid: "inv_1",
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: "PENDING",
+          required: false,
+          respondedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ],
     });
 
@@ -178,12 +251,23 @@ describe("SpecificMeetingService", () => {
       title: "Planning",
       description: null,
       timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
+      startTime: futureStartTime,
+      endTime: futureEndTime,
       status: SpecificMeetingStatus.CANCELLED,
-      organizer: { id: 10, name: "Org", email: "org@example.com" },
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
       invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: SpecificMeetingInviteeStatus.PENDING, respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 11,
+          uid: "inv_1",
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: SpecificMeetingInviteeStatus.PENDING,
+          required: false,
+          respondedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ],
     });
 
@@ -197,42 +281,95 @@ describe("SpecificMeetingService", () => {
   });
 
   it("responds to invitee and returns updated view", async () => {
-    repository.findInviteeContext.mockResolvedValue({
-      id: 1,
-      uid: "sm_1",
-      title: "Planning",
-      description: null,
-      timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
-      status: SpecificMeetingStatus.SCHEDULED,
-      bookingId: null,
-      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
-      eventType: { id: 100, locations: [] },
-      invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: SpecificMeetingInviteeStatus.PENDING, respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
-      ],
-    });
+    repository.findInviteeContext
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: null,
+        booking: null,
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.PENDING,
+            required: false,
+            respondedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: null,
+        booking: null,
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.ACCEPTED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.ACCEPTED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      });
     repository.updateInviteeResponse.mockResolvedValue({});
     createBookingMock.mockResolvedValue({ id: 222, uid: "booking_1" });
     repository.attachBooking.mockResolvedValue({});
     repository.markBookingFailure.mockResolvedValue({ bookingFailureNotifiedAt: new Date() });
-    repository.findInviteeContext.mockResolvedValueOnce({
-      id: 1,
-      uid: "sm_1",
-      title: "Planning",
-      description: null,
-      timeZone: "UTC",
-      startTime: new Date("2026-04-01T10:00:00.000Z"),
-      endTime: new Date("2026-04-01T10:30:00.000Z"),
-      status: SpecificMeetingStatus.SCHEDULED,
-      bookingId: null,
-      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
-      eventType: { id: 100, locations: [] },
-      invitees: [
-        { id: 11, uid: "inv_1", name: "Alex", email: "alex@example.com", responseToken: "token_1", status: SpecificMeetingInviteeStatus.PENDING, respondedAt: null, createdAt: new Date(), updatedAt: new Date() },
-      ],
-    });
 
     const result = await service.respond({
       uid: "sm_1",
@@ -249,12 +386,28 @@ describe("SpecificMeetingService", () => {
       })
     );
     expect(repository.attachBooking).toHaveBeenCalledWith({ uid: "sm_1", bookingId: 222 });
+    expect(bookingUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 222 },
+        data: expect.objectContaining({
+          title: "Planning",
+          attendees: expect.objectContaining({
+            updateMany: [
+              {
+                where: { email: "alex@example.com" },
+                data: { name: "Alex" },
+              },
+            ],
+          }),
+        }),
+      })
+    );
     expect(repository.updateInviteeResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         inviteeId: 11,
         status: SpecificMeetingInviteeStatus.ACCEPTED,
       })
     );
-    expect(result.invitee.status).toBe(SpecificMeetingInviteeStatus.PENDING);
+    expect(result.invitee.status).toBe(SpecificMeetingInviteeStatus.ACCEPTED);
   });
 });

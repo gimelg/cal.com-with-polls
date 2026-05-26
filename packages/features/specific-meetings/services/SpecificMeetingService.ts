@@ -65,7 +65,7 @@ type InviteeMeeting = {
     periodCountCalendarDays?: boolean;
     minimumBookingNotice?: number;
     schedule?: { timeZone: string | null } | null;
-    user?: { defaultScheduleId: number | null; schedules: Array<{ id: number; timeZone: string | null }> } | null;
+    owner?: { defaultScheduleId: number | null; schedules: Array<{ id: number; timeZone: string | null }> } | null;
     locations: Prisma.JsonValue | null;
   };
 
@@ -310,6 +310,7 @@ export class SpecificMeetingService {
         email: item.email,
         responseToken: item.responseToken,
         status: item.status,
+        required: item.required,
         respondedAt: item.respondedAt,
       })),
     };
@@ -592,7 +593,7 @@ export class SpecificMeetingService {
   }) {
     const eventTimeZone =
       input.eventType.schedule?.timeZone ??
-      input.eventType.user?.schedules.find((schedule) => schedule.id === input.eventType.user?.defaultScheduleId)
+      input.eventType.owner?.schedules.find((schedule) => schedule.id === input.eventType.owner?.defaultScheduleId)
         ?.timeZone;
 
     await validateBookingTimeIsNotOutOfBounds(

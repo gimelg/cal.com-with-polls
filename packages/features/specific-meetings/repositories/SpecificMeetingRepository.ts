@@ -93,7 +93,7 @@ export class SpecificMeetingRepository {
             timeZone: true,
           },
         },
-        user: {
+        owner: {
           select: {
             defaultScheduleId: true,
             schedules: {

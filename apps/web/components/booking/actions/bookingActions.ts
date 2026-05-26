@@ -4,6 +4,15 @@ import type { ActionType } from "@calcom/ui/components/table";
 
 import type { BookingItemProps } from "../types";
 
+const getSpecificMeetingInviteeCount = (metadata: BookingItemProps["metadata"]): number => {
+  if (!metadata || typeof metadata !== "object" || !("specificMeetingInviteeCount" in metadata)) {
+    return 0;
+  }
+
+  const inviteeCount = metadata.specificMeetingInviteeCount;
+  return Number(typeof inviteeCount === "string" || typeof inviteeCount === "number" ? inviteeCount : 0);
+};
+
 export interface BookingActionContext {
   booking: BookingItemProps;
   isUpcoming: boolean;
@@ -106,8 +115,7 @@ export function getEditEventActions(context: BookingActionContext): ActionType[]
     t,
   } = context;
   const seatReferenceUid = getSeatReferenceUid();
-  const specificMeetingInviteeCount = Number(booking.metadata?.specificMeetingInviteeCount || 0);
-  const isMultiInviteeSpecificMeeting = specificMeetingInviteeCount > 1;
+  const isMultiInviteeSpecificMeeting = getSpecificMeetingInviteeCount(booking.metadata) > 1;
 
   const isReassignableRoundRobin =
     booking.eventType.schedulingType === SchedulingType.ROUND_ROBIN &&
