@@ -7,6 +7,7 @@ import { useLocale } from "@calcom/lib/hooks/useLocale";
 import type { RouterOutputs } from "@calcom/trpc/react";
 import { trpc } from "@calcom/trpc/react";
 import { Badge } from "@calcom/ui/components/badge";
+import type { BadgeProps } from "@calcom/ui/components/badge";
 import { Button } from "@calcom/ui/components/button";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { TextAreaField, TextField } from "@calcom/ui/components/form";
@@ -46,10 +47,10 @@ const getMeetingUiStatus = (meeting: MeetingItem): MeetingUiStatus => {
   return "PENDING";
 };
 
-const getStatusVariant = (status: MeetingUiStatus) => {
-  if (status === "SCHEDULED") return "green" as const;
-  if (status === "PENDING") return "yellow" as const;
-  return "gray" as const;
+const getStatusVariant = (status: MeetingUiStatus): BadgeProps["variant"] => {
+  if (status === "SCHEDULED") return "green";
+  if (status === "PENDING") return "warning";
+  return "gray";
 };
 
 const getStatusLabel = (status: MeetingUiStatus, t: ReturnType<typeof useLocale>["t"]) => {
