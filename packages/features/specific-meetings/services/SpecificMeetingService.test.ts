@@ -423,6 +423,7 @@ describe("SpecificMeetingService", () => {
         bookingData: expect.objectContaining({
           eventTypeId: 100,
           idempotencyKey: "specific-meeting:sm_1",
+          noEmail: true,
         }),
       })
     );

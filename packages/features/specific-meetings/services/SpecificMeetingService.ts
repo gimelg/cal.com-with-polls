@@ -408,7 +408,7 @@ export class SpecificMeetingService {
           specificMeetingInviteeCount: String(meeting.invitees.length),
         },
         responses,
-        noEmail: false,
+        noEmail: true,
         creationSource: CreationSource.WEBAPP,
       };
 
