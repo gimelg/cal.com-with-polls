@@ -1,9 +1,9 @@
 import { getReplyToHeader } from "@calcom/lib/getReplyToHeader";
 import type { CalendarEvent, Person } from "@calcom/types/Calendar";
-
 import generateIcsFile, { GenerateIcsRole } from "../lib/generateIcsFile";
 import renderEmail from "../src/renderEmail";
 import AttendeeScheduledEmail from "./attendee-scheduled-email";
+import { getCompactEventTitle } from "./getAttendeeSummary";
 
 export default class AttendeeRescheduledEmail extends AttendeeScheduledEmail {
   protected async getNodeMailerPayload(): Promise<Record<string, unknown>> {
@@ -20,7 +20,7 @@ export default class AttendeeRescheduledEmail extends AttendeeScheduledEmail {
         this.calEvent.attendees.filter(({ email }) => email !== this.attendee.email).map(({ email }) => email)
       ),
       subject: `${this.attendee.language.translate("event_type_has_been_rescheduled_on_time_date", {
-        title: this.calEvent.title,
+        title: getCompactEventTitle(this.calEvent),
         date: this.getFormattedDate(),
       })}`,
       html: await this.getHtml(this.calEvent, this.attendee),
@@ -28,7 +28,7 @@ export default class AttendeeRescheduledEmail extends AttendeeScheduledEmail {
     };
   }
 
-  async getHtml(calEvent: CalendarEvent, attendee: Person) {
+  async getHtml(calEvent: CalendarEvent, attendee: Person): Promise<string> {
     return await renderEmail("AttendeeRescheduledEmail", {
       calEvent,
       attendee,
