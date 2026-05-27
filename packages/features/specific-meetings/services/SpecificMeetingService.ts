@@ -666,6 +666,7 @@ export class SpecificMeetingService {
         startTime: startOfDay.toISOString(),
         endTime: endOfDay.toISOString(),
         timeZone: input.timeZone,
+        isTeamEvent: false,
       },
     });
 
