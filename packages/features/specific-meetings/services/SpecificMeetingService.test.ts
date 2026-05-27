@@ -410,4 +410,322 @@ describe("SpecificMeetingService", () => {
     );
     expect(result.invitee.status).toBe(SpecificMeetingInviteeStatus.ACCEPTED);
   });
+
+  it("does not cancel the whole booking when another invitee is still pending", async () => {
+    repository.findInviteeContext
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.ACCEPTED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 12,
+            uid: "inv_2",
+            name: "Blair",
+            email: "blair@example.com",
+            responseToken: "token_2",
+            status: SpecificMeetingInviteeStatus.PENDING,
+            required: false,
+            respondedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 12,
+            uid: "inv_2",
+            name: "Blair",
+            email: "blair@example.com",
+            responseToken: "token_2",
+            status: SpecificMeetingInviteeStatus.PENDING,
+            required: false,
+            respondedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        invitee: {
+          id: 11,
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: SpecificMeetingInviteeStatus.DECLINED,
+          required: false,
+          respondedAt: new Date(),
+        },
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 12,
+            uid: "inv_2",
+            name: "Blair",
+            email: "blair@example.com",
+            responseToken: "token_2",
+            status: SpecificMeetingInviteeStatus.PENDING,
+            required: false,
+            respondedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        invitee: {
+          id: 11,
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: SpecificMeetingInviteeStatus.DECLINED,
+          required: false,
+          respondedAt: new Date(),
+        },
+      });
+
+    repository.updateInviteeResponse.mockResolvedValue({});
+
+    const result = await service.respond({
+      uid: "sm_1",
+      responseToken: "token_1",
+      response: "DECLINED",
+    });
+
+    expect(repository.updateInviteeResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inviteeId: 11,
+        status: SpecificMeetingInviteeStatus.DECLINED,
+      })
+    );
+    expect(handleCancelBookingMock).not.toHaveBeenCalled();
+    expect(result.invitee.status).toBe(SpecificMeetingInviteeStatus.DECLINED);
+  });
+
+  it("cancels the whole booking when the last remaining invitee declines", async () => {
+    repository.findInviteeContext
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.ACCEPTED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 12,
+            uid: "inv_2",
+            name: "Blair",
+            email: "blair@example.com",
+            responseToken: "token_2",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 12,
+            uid: "inv_2",
+            name: "Blair",
+            email: "blair@example.com",
+            responseToken: "token_2",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        invitee: {
+          id: 11,
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: SpecificMeetingInviteeStatus.DECLINED,
+          required: false,
+          respondedAt: new Date(),
+        },
+      })
+      .mockResolvedValueOnce({
+        id: 1,
+        uid: "sm_1",
+        title: "Planning",
+        description: null,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        status: SpecificMeetingStatus.SCHEDULED,
+        bookingId: 222,
+        booking: { uid: "booking_1" },
+        organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+        eventType: { id: 100, locations: [] },
+        invitees: [
+          {
+            id: 11,
+            uid: "inv_1",
+            name: "Alex",
+            email: "alex@example.com",
+            responseToken: "token_1",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 12,
+            uid: "inv_2",
+            name: "Blair",
+            email: "blair@example.com",
+            responseToken: "token_2",
+            status: SpecificMeetingInviteeStatus.DECLINED,
+            required: false,
+            respondedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+        invitee: {
+          id: 11,
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: SpecificMeetingInviteeStatus.DECLINED,
+          required: false,
+          respondedAt: new Date(),
+        },
+      });
+
+    repository.updateInviteeResponse.mockResolvedValue({});
+
+    const result = await service.respond({
+      uid: "sm_1",
+      responseToken: "token_1",
+      response: "DECLINED",
+    });
+
+    expect(handleCancelBookingMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 10,
+        userUuid: "uuid-10",
+        bookingData: expect.objectContaining({ id: 222, cancelledBy: "org@example.com" }),
+      })
+    );
+    expect(result.invitee.status).toBe(SpecificMeetingInviteeStatus.DECLINED);
+  });
 });
