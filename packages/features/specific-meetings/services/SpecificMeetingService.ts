@@ -237,6 +237,7 @@ export class SpecificMeetingService {
     }
 
     const isPastMeeting = meeting.endTime < new Date();
+    const hasCancelledBooking = meeting.booking?.status === "CANCELLED";
     const hasNoAcceptedInvitees = !meeting.invitees.some(
       (invitee) => invitee.status === SpecificMeetingInviteeStatus.ACCEPTED
     );
@@ -246,12 +247,13 @@ export class SpecificMeetingService {
 
     if (
       meeting.status !== SpecificMeetingStatus.CANCELLED &&
+      !hasCancelledBooking &&
       !isPastMeeting &&
       !(hasNoAcceptedInvitees && allInviteesDeclined)
     ) {
       throw new ErrorWithCode(
         ErrorCode.BadRequest,
-        "Only cancelled, past, or no-meeting specific meetings can be deleted"
+        "Only cancelled, booking-cancelled, past, or no-meeting specific meetings can be deleted"
       );
     }
 
