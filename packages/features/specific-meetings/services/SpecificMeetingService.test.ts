@@ -221,6 +221,41 @@ describe("SpecificMeetingService", () => {
     expect(repository.createSpecificMeeting).not.toHaveBeenCalled();
   });
 
+  it("rejects meetings whose duration does not match the event type", async () => {
+    repository.findOwnedEventType.mockResolvedValue({
+      id: 100,
+      title: "1:1",
+      slug: "one-on-one",
+      length: 30,
+      locations: [],
+      userId: 10,
+      minimumBookingNotice: 0,
+      periodType: "UNLIMITED",
+      periodDays: null,
+      periodEndDate: null,
+      periodStartDate: null,
+      periodCountCalendarDays: false,
+      schedule: { timeZone: "UTC" },
+      owner: { defaultScheduleId: null, schedules: [] },
+    });
+
+    await expect(
+      service.create({
+        organizerId: 10,
+        eventTypeId: 100,
+        title: "Planning",
+        description: undefined,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: new Date("2027-04-01T11:00:00.000Z"),
+        participants: [{ name: "Alex", email: "alex@example.com" }],
+      })
+    ).rejects.toThrow("Specific meeting duration must match the event type duration");
+
+    expect(getAvailableSlotsMock).not.toHaveBeenCalled();
+    expect(repository.createSpecificMeeting).not.toHaveBeenCalled();
+  });
+
   it("cancels the linked booking and meeting", async () => {
     repository.findOwnedByUid.mockResolvedValue({
       id: 1,

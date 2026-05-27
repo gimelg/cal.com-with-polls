@@ -223,9 +223,8 @@ const EventTypeWeb = ({
   const orgBranding = useOrgBranding();
 
   const bookerUrl = orgBranding ? orgBranding?.fullDomain : WEBSITE_URL;
-  const permalink = `${bookerUrl}/${team ? `team/${team.slug}` : eventType.users[0].username}/${
-    eventType.slug
-  }`;
+  const eventOwnerUsername = eventType.users[0]?.username ?? user?.username ?? "";
+  const permalink = `${bookerUrl}/${team ? `team/${team.slug}` : eventOwnerUsername}/${eventType.slug}`;
 
   const tabMap = {
     setup: (
