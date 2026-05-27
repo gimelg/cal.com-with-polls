@@ -789,6 +789,7 @@
   "specific_meeting_require_all": "Require all",
   "specific_meeting_required": "Required",
   "specific_meeting_duplicated_to_form": "Meeting copied into the form. Choose a new date and time.",
+  "specific_meeting_only_organizer_can_reschedule": "Only the organizer can reschedule this meeting.",
   "create_specific_meeting": "Create specific meeting",
   "specific_meeting_existing": "Existing meetings",
   "no_specific_meetings_created": "No specific meetings yet",

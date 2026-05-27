@@ -1,8 +1,6 @@
 // page can be a server component
-import type { GetServerSidePropsContext } from "next";
-import { URLSearchParams } from "node:url";
-import { z } from "zod";
 
+import { URLSearchParams } from "node:url";
 import { getServerSession } from "@calcom/features/auth/lib/getServerSession";
 import { buildEventUrlFromBooking } from "@calcom/features/bookings/lib/buildEventUrlFromBooking";
 import { determineReschedulePreventionRedirect } from "@calcom/features/bookings/lib/reschedule/determineReschedulePreventionRedirect";
@@ -10,6 +8,17 @@ import { getDefaultEvent } from "@calcom/features/eventtypes/lib/defaultEvents";
 import { UserRepository } from "@calcom/features/users/repositories/UserRepository";
 import { maybeGetBookingUidFromSeat } from "@calcom/lib/server/maybeGetBookingUidFromSeat";
 import prisma, { bookingMinimalSelect } from "@calcom/prisma";
+import type { GetServerSidePropsContext } from "next";
+import { z } from "zod";
+
+const getSpecificMeetingInviteeCount = (metadata: unknown) => {
+  if (!metadata || typeof metadata !== "object" || !("specificMeetingInviteeCount" in metadata)) {
+    return 0;
+  }
+
+  const inviteeCount = metadata.specificMeetingInviteeCount;
+  return Number(typeof inviteeCount === "string" || typeof inviteeCount === "number" ? inviteeCount : 0);
+};
 
 const querySchema = z.object({
   uid: z.string(),
@@ -99,6 +108,23 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       notFound: true,
     } as const;
   }
+
+  const isSpecificMeetingWithMultipleInvitees = getSpecificMeetingInviteeCount(booking.metadata) > 1;
+  const isOrganizerRescheduling =
+    session?.user?.id != null &&
+    (session.user.id === booking.userId ||
+      booking.eventType?.owner?.id === session.user.id ||
+      booking.eventType?.hosts.some((host) => host.user.id === session.user.id));
+
+  if (isSpecificMeetingWithMultipleInvitees && !isOrganizerRescheduling) {
+    return {
+      redirect: {
+        destination: `/booking/${bookingUid}?error=specific-meeting-organizer-reschedule-only`,
+        permanent: false,
+      },
+    } as const;
+  }
+
   const eventType = booking.eventType ? booking.eventType : getDefaultEvent(dynamicEventSlugRef);
 
   const userRepo = new UserRepository(prisma);
