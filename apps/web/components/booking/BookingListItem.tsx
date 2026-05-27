@@ -42,6 +42,10 @@ import assignmentReasonBadgeTitleMap from "@lib/booking/assignmentReasonBadgeTit
 
 import { WrongAssignmentDialog } from "../dialog/WrongAssignmentDialog";
 import { buildBookingLink } from "../../modules/bookings/lib/buildBookingLink";
+import {
+  getBookingAttendeeDisplayName,
+  hasBookingAttendeeDisplayName,
+} from "../../modules/bookings/lib/getBookingAttendeeDisplayName";
 import { useBookingDetailsSheetStore } from "../../modules/bookings/store/bookingDetailsSheetStore";
 import type { BookingAttendee } from "../../modules/bookings/types";
 import { AcceptBookingButton } from "./AcceptBookingButton";
@@ -808,7 +812,7 @@ const Attendee = (
     },
   });
 
-  const displayName = user?.name || name || user?.email || email;
+  const displayName = getBookingAttendeeDisplayName(attendeeProps);
 
   const isTeamMemberOrHost =
     email === organizerEmail || eventTypeHosts?.some((host) => host.user?.email === email);
@@ -943,9 +947,8 @@ const GroupedAttendees = (groupedAttendeeProps: GroupedAttendeeProps) => {
         <form onSubmit={handleSubmit(onSubmit)}>
           {fields.slice(1).map((field, index) => {
             const attendee = attendees[index + 1];
-            const displayName =
-              attendee.user?.name || attendee.name || attendee.user?.email || attendee.email;
-            const hasName = attendee.name || attendee.user?.name;
+            const displayName = getBookingAttendeeDisplayName(attendee);
+            const hasName = hasBookingAttendeeDisplayName(attendee);
 
             return (
               <Controller
@@ -1017,8 +1020,8 @@ const GroupedGuests = ({ guests }: { guests: BookingAttendee[] }) => {
       <DropdownMenuContent className="min-w-[300px]">
         <DropdownMenuLabel className="text-xs font-medium uppercase">{t("guests")}</DropdownMenuLabel>
         {guests.slice(1).map((guest) => {
-          const displayName = guest.user?.name || guest.name || guest.user?.email || guest.email;
-          const hasName = guest.name || guest.user?.name;
+          const displayName = getBookingAttendeeDisplayName(guest);
+          const hasName = hasBookingAttendeeDisplayName(guest);
 
           return (
             <DropdownMenuItem key={guest.id}>

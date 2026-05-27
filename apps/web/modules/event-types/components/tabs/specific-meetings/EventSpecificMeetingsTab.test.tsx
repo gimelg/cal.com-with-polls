@@ -167,4 +167,35 @@ describe("EventSpecificMeetingsTab", () => {
 
     expect(showToastMock).toHaveBeenCalledWith("specific_meeting_participant_required", "error");
   });
+
+  it("supports per-invitee required acceptance and require all", () => {
+    listByEventTypeUseQueryMock.mockReturnValue({ isPending: false, data: [] });
+
+    render(<EventSpecificMeetingsTab eventType={eventTypeFixture} />);
+
+    fireEvent.change(screen.getByLabelText("title"), { target: { value: "Planning" } });
+    fireEvent.change(screen.getByLabelText("name"), { target: { value: "Alex" } });
+    fireEvent.change(screen.getByLabelText("email"), { target: { value: "alex@example.com" } });
+
+    fireEvent.click(screen.getByText("add_participant"));
+
+    const nameFields = screen.getAllByLabelText("name");
+    const emailFields = screen.getAllByLabelText("email");
+    fireEvent.change(nameFields[1], { target: { value: "Blair" } });
+    fireEvent.change(emailFields[1], { target: { value: "blair@example.com" } });
+
+    const requiredCheckboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(requiredCheckboxes[0]);
+    fireEvent.click(screen.getByText("specific_meeting_require_all"));
+    fireEvent.click(screen.getByText("create_specific_meeting"));
+
+    expect(createMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        participants: [
+          { name: "Alex", email: "alex@example.com", required: true },
+          { name: "Blair", email: "blair@example.com", required: true },
+        ],
+      })
+    );
+  });
 });

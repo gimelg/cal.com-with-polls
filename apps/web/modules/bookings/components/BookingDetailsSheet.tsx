@@ -49,6 +49,7 @@ import {
   checkSheetActive,
   createBookingSheetKeydownHandler,
 } from "../lib/bookingSheetKeyboardHandler";
+import { getBookingAttendeeDisplayName } from "../lib/getBookingAttendeeDisplayName";
 import { JoinMeetingButton } from "./JoinMeetingButton";
 
 type BookingMetaData = z.infer<typeof bookingMetadataSchema>;
@@ -605,11 +606,7 @@ function WhoSection({ booking }: { booking: BookingOutput }) {
         )}
 
         {booking.attendees.map((attendee, idx) => {
-          const name =
-            attendee.user?.name ||
-            attendee.name ||
-            attendee.user?.email ||
-            attendee.email;
+          const name = getBookingAttendeeDisplayName(attendee);
           return (
             <div key={idx} className="flex items-center gap-4">
               <Avatar

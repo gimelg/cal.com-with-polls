@@ -4,16 +4,21 @@ import type { TFunction } from "i18next";
 import { Info } from "./Info";
 
 export const PersonInfo = ({ name = "", email = "", role = "", phoneNumber = "" }) => {
-  const displayEmail = !isSmsCalEmail(email);
-  const formattedPhoneNumber = phoneNumber ? `${phoneNumber} ` : "";
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const trimmedPhoneNumber = phoneNumber.trim();
+  const displayEmail = Boolean(trimmedEmail) && !isSmsCalEmail(trimmedEmail);
+  const displayName = trimmedName || trimmedEmail || trimmedPhoneNumber;
+  const details = [role, trimmedPhoneNumber].filter(Boolean).join(" ");
 
   return (
     <div style={{ color: "#101010", fontWeight: 400, lineHeight: "24px" }}>
-      {name} - {role} {formattedPhoneNumber}
+      {displayName}
+      {details ? ` - ${details} ` : " "}
       {displayEmail && (
         <span style={{ color: "#4B5563" }}>
-          <a href={`mailto:${email}`} style={{ color: "#4B5563" }}>
-            {email}
+          <a href={`mailto:${trimmedEmail}`} style={{ color: "#4B5563" }}>
+            {trimmedEmail}
           </a>
         </span>
       )}

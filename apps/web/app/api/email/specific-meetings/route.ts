@@ -1,4 +1,5 @@
 import renderEmail from "@calcom/emails/src/renderEmail";
+import { TimeFormat } from "@calcom/lib/timeFormat";
 import { getTranslation } from "@calcom/i18n/server";
 import { IS_PRODUCTION } from "@calcom/lib/constants";
 import { defaultResponderForAppDir } from "app/api/defaultResponderForAppDir";
@@ -46,6 +47,50 @@ async function getHandler(request: NextRequest) {
     });
   } else if (template === "cancelled") {
     emailHtml = await renderEmail("SpecificMeetingCancelledEmail", common);
+  } else if (template === "scheduled") {
+    emailHtml = await renderEmail("AttendeeScheduledEmail", {
+      attendee: {
+        name: "Alpha Invitee",
+        email: "alpha@local.dev",
+        timeZone: "UTC",
+        timeFormat: TimeFormat.TWELVE_HOUR,
+        language: { translate: t, locale: "en" },
+      },
+      calEvent: {
+        title: "Specific meeting scheduled preview",
+        type: "Specific Meeting",
+        startTime: "2026-05-22T15:15:00.000Z",
+        endTime: "2026-05-22T15:45:00.000Z",
+        organizer: {
+          id: 1,
+          name: "Test Admin",
+          email: "test-admin@local.dev",
+          timeZone: "UTC",
+          timeFormat: TimeFormat.TWELVE_HOUR,
+          language: { translate: t, locale: "en" },
+        },
+        attendees: [
+          {
+            name: "Alpha Invitee",
+            email: "alpha@local.dev",
+            timeZone: "UTC",
+            timeFormat: TimeFormat.TWELVE_HOUR,
+            language: { translate: t, locale: "en" },
+          },
+          {
+            name: "Beta Invitee",
+            email: "beta@local.dev",
+            timeZone: "UTC",
+            timeFormat: TimeFormat.TWELVE_HOUR,
+            language: { translate: t, locale: "en" },
+          },
+        ],
+        location: "https://app.cal.com/video/test",
+        description: "Specific meeting preview for who-section verification.",
+        additionalNotes: "These attendee names should appear in the Who section.",
+        hideBranding,
+      },
+    });
   } else {
     emailHtml = await renderEmail("SpecificMeetingInviteEmail", {
       ...common,
