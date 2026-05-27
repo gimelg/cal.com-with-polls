@@ -3,28 +3,28 @@ import type { ComponentProps, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PublicPollPage } from "./PublicPollPage";
 
+const t = (key: string, values?: Record<string, string | number>) => {
+  if (key === "poll_option_number") {
+    return `Option ${values?.number}`;
+  }
+
+  if (key === "poll_option_vote_breakdown") {
+    return `Yes: ${values?.yes} · If needed: ${values?.ifNeeded} · No: ${values?.no}`;
+  }
+
+  if (key === "poll_participant_count") {
+    return `${values?.count} participants`;
+  }
+
+  if (key === "poll_vote_submitted_description") {
+    return `${values?.participantName} submitted for ${values?.pollTitle}`;
+  }
+
+  return key;
+};
+
 vi.mock("@calcom/lib/hooks/useLocale", () => ({
-  useLocale: () => ({
-    t: (key: string, values?: Record<string, string | number>) => {
-      if (key === "poll_option_number") {
-        return `Option ${values?.number}`;
-      }
-
-      if (key === "poll_option_vote_breakdown") {
-        return `Yes: ${values?.yes} · If needed: ${values?.ifNeeded} · No: ${values?.no}`;
-      }
-
-      if (key === "poll_participant_count") {
-        return `${values?.count} participants`;
-      }
-
-      if (key === "poll_vote_submitted_description") {
-        return `${values?.participantName} submitted for ${values?.pollTitle}`;
-      }
-
-      return key;
-    },
-  }),
+  useLocale: () => ({ t }),
 }));
 
 vi.mock("@calcom/features/polls/lib/poll-types", () => ({
