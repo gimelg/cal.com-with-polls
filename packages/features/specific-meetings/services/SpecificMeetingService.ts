@@ -138,6 +138,11 @@ export class SpecificMeetingService {
 
     await this.resolveLocationValue(eventType.locations);
 
+    this.validateMeetingDuration({
+      eventType,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    });
     await this.validateMeetingTimeWithinEventBounds({
       eventType,
       startTime: input.startTime,
@@ -146,6 +151,7 @@ export class SpecificMeetingService {
     await this.validateMeetingTimeWithinAvailability({
       eventType,
       startTime: input.startTime,
+      endTime: input.endTime,
       timeZone: input.timeZone,
     });
 
@@ -628,9 +634,24 @@ export class SpecificMeetingService {
     );
   }
 
+  private validateMeetingDuration(input: {
+    eventType: NonNullable<Awaited<ReturnType<SpecificMeetingRepository["findOwnedEventType"]>>>;
+    startTime: Date;
+    endTime: Date;
+  }) {
+    const meetingDurationMinutes = (input.endTime.getTime() - input.startTime.getTime()) / 60000;
+    if (meetingDurationMinutes !== input.eventType.length) {
+      throw new ErrorWithCode(
+        ErrorCode.BadRequest,
+        "Specific meeting duration must match the event type duration"
+      );
+    }
+  }
+
   private async validateMeetingTimeWithinAvailability(input: {
     eventType: NonNullable<Awaited<ReturnType<SpecificMeetingRepository["findOwnedEventType"]>>>;
     startTime: Date;
+    endTime: Date;
     timeZone: string;
   }) {
     const availableSlotsService = getAvailableSlotsService();
@@ -653,8 +674,10 @@ export class SpecificMeetingService {
       slotToCheckInIso: input.startTime.toISOString(),
       quickAvailabilityChecks: [],
     });
+    const durationMatchesEventType =
+      input.endTime.getTime() - input.startTime.getTime() === input.eventType.length * 60000;
 
-    if (!isStartSlotAvailable) {
+    if (!isStartSlotAvailable || !durationMatchesEventType) {
       throw new ErrorWithCode(
         ErrorCode.BadRequest,
         "Specific meeting must be scheduled within the event type availability"

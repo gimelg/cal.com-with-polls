@@ -82,13 +82,13 @@ function EventTypeSingleLayout({
   const shouldLockDisableProps = (_field: string) => ({ disabled: false, LockedIcon: false as const, isLocked: false });
   const shouldLockIndicator = (_field: string) => false;
   const EventTypeTabs = tabsNavigation;
+  const formUsers = formMethods.getValues("users");
+  const eventOwnerUsername = formUsers[0]?.username ?? eventType.users[0]?.username ?? "";
   const permalink = `${bookerUrl}/${
-    team ? `${!team.parentId ? "team/" : ""}${team.slug}` : formMethods.getValues("users")[0].username
+    team ? `${!team.parentId ? "team/" : ""}${team.slug}` : eventOwnerUsername
   }/${eventType.slug}`;
 
-  const embedLink = `${
-    team ? `team/${team.slug}` : formMethods.getValues("users")[0].username
-  }/${formMethods.getValues("slug")}`;
+  const embedLink = `${team ? `team/${team.slug}` : eventOwnerUsername}/${formMethods.getValues("slug")}`;
   const isManagedEvent = formMethods.getValues("schedulingType") === SchedulingType.MANAGED ? "_managed" : "";
 
   const [Shell] = useMemo(() => {

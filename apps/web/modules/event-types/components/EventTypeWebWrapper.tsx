@@ -180,12 +180,11 @@ const EventTypeWeb = ({
   const { form, handleSubmit } = useEventTypeForm({ eventType, onSubmit: updateMutation.mutate });
   const slug = form.watch("slug") ?? eventType.slug;
 
-  const orgBranding = null as { id: number; [key: string]: unknown } | null;
+  const orgBranding = useOrgBranding();
 
-  const bookerUrl = orgBranding ? "" : WEBSITE_URL;
-  const permalink = `${bookerUrl}/${team ? `team/${team.slug}` : eventType.users[0].username}/${
-    eventType.slug
-  }`;
+  const bookerUrl = orgBranding ? orgBranding?.fullDomain : WEBSITE_URL;
+  const eventOwnerUsername = eventType.users[0]?.username ?? user?.username ?? "";
+  const permalink = `${bookerUrl}/${team ? `team/${team.slug}` : eventOwnerUsername}/${eventType.slug}`;
 
   const tabMap = {
     setup: (
