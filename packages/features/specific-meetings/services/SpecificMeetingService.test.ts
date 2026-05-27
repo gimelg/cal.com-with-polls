@@ -52,6 +52,7 @@ describe("SpecificMeetingService", () => {
     findInviteeContext: vi.fn(),
     updateInviteeResponse: vi.fn(),
     cancelSpecificMeeting: vi.fn(),
+    deleteSpecificMeeting: vi.fn(),
     markBookingFailure: vi.fn(),
     markBookingFailureNotificationSent: vi.fn(),
     findPendingBookingRetries: vi.fn(),
@@ -242,6 +243,46 @@ describe("SpecificMeetingService", () => {
     expect(repository.cancelSpecificMeeting).toHaveBeenCalledWith({ uid: "sm_1" });
     expect(result.status).toBe(SpecificMeetingStatus.CANCELLED);
     expect(result.invitees[0]?.responseUrl).toBe("/meeting/sm_1?token=token_1");
+  });
+
+  it("allows deleting a meeting whose linked booking was already cancelled", async () => {
+    repository.findOwnedByUid.mockResolvedValue({
+      id: 1,
+      uid: "sm_1",
+      title: "Planning",
+      description: null,
+      timeZone: "UTC",
+      startTime: futureStartTime,
+      endTime: futureEndTime,
+      status: SpecificMeetingStatus.SCHEDULED,
+      bookingId: 222,
+      booking: { id: 222, uid: "booking_1", status: "CANCELLED" },
+      organizer: { id: 10, uuid: "uuid-10", name: "Org", email: "org@example.com" },
+      eventType: { id: 100, title: "1:1", slug: "one-on-one", length: 30, locations: [], userId: 10 },
+      invitees: [
+        {
+          id: 11,
+          uid: "inv_1",
+          name: "Alex",
+          email: "alex@example.com",
+          responseToken: "token_1",
+          status: SpecificMeetingInviteeStatus.ACCEPTED,
+          required: false,
+          respondedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+    });
+    repository.deleteSpecificMeeting.mockResolvedValue({ uid: "sm_1" });
+
+    const result = await service.delete({
+      uid: "sm_1",
+      organizerId: 10,
+    });
+
+    expect(repository.deleteSpecificMeeting).toHaveBeenCalledWith({ uid: "sm_1" });
+    expect(result).toEqual({ uid: "sm_1" });
   });
 
   it("rejects responses after cancellation", async () => {
