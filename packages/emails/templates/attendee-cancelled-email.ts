@@ -1,9 +1,9 @@
 import { getReplyToHeader } from "@calcom/lib/getReplyToHeader";
 import type { CalendarEvent, Person } from "@calcom/types/Calendar";
-
 import generateIcsFile, { GenerateIcsRole } from "../lib/generateIcsFile";
 import renderEmail from "../src/renderEmail";
 import AttendeeScheduledEmail from "./attendee-scheduled-email";
+import { getCompactEventTitle } from "./getAttendeeSummary";
 
 export default class AttendeeCancelledEmail extends AttendeeScheduledEmail {
   protected async getNodeMailerPayload(): Promise<Record<string, unknown>> {
@@ -17,7 +17,7 @@ export default class AttendeeCancelledEmail extends AttendeeScheduledEmail {
       from: `${this.calEvent.organizer.name} <${this.getMailerOptions().from}>`,
       ...getReplyToHeader(this.calEvent),
       subject: `${this.t("event_cancelled_subject", {
-        title: this.calEvent.title,
+        title: getCompactEventTitle(this.calEvent),
         date: this.getFormattedDate(),
       })}`,
       html: await this.getHtml(this.calEvent, this.attendee),
@@ -25,7 +25,7 @@ export default class AttendeeCancelledEmail extends AttendeeScheduledEmail {
     };
   }
 
-  async getHtml(calEvent: CalendarEvent, attendee: Person) {
+  async getHtml(calEvent: CalendarEvent, attendee: Person): Promise<string> {
     return await renderEmail("AttendeeCancelledEmail", {
       calEvent,
       attendee,

@@ -1,27 +1,9 @@
 import { EMAIL_FROM_NAME } from "@calcom/lib/constants";
 import type { CalendarEvent } from "@calcom/types/Calendar";
-
 import generateIcsFile, { GenerateIcsRole } from "../lib/generateIcsFile";
 import renderEmail from "../src/renderEmail";
+import { getAttendeeSummary } from "./getAttendeeSummary";
 import OrganizerScheduledEmail from "./organizer-scheduled-email";
-
-const getAttendeeSummary = (calEvent: CalendarEvent) => {
-  const [firstAttendee, ...otherAttendees] = calEvent.attendees;
-
-  if (!firstAttendee) {
-    return "";
-  }
-
-  if (otherAttendees.length === 0) {
-    return firstAttendee.name;
-  }
-
-  if (otherAttendees.length === 1) {
-    return `${firstAttendee.name} and ${otherAttendees[0].name}`;
-  }
-
-  return `${firstAttendee.name} and ${otherAttendees.length} other attendees`;
-};
 
 export default class OrganizerRequestedToRescheduleEmail extends OrganizerScheduledEmail {
   private metadata: { rescheduleLink: string };
