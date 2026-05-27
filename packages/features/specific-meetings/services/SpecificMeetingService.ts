@@ -9,16 +9,18 @@ import {
   sendSpecificMeetingBookingFailedEmail,
   sendSpecificMeetingConfirmationEmail,
 } from "@calcom/emails/poll-email-service";
+import { isTimeSlotAvailable } from "@calcom/features/bookings/Booker/utils/isTimeslotAvailable";
 import { getRegularBookingService } from "@calcom/features/bookings/di/RegularBookingService.container";
 import type { CreateRegularBookingData } from "@calcom/features/bookings/lib/dto/types";
 import handleCancelBooking from "@calcom/features/bookings/lib/handleCancelBooking";
 import { validateBookingTimeIsNotOutOfBounds } from "@calcom/features/bookings/lib/handleNewBooking/validateBookingTimeIsNotOutOfBounds";
+import { getAvailableSlotsService } from "@calcom/features/di/containers/AvailableSlots";
 import { getHideBranding } from "@calcom/features/profile/lib/hideBranding";
-import logger from "@calcom/lib/logger";
 import { getTranslation } from "@calcom/i18n/server";
 import { WEBAPP_URL } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
+import logger from "@calcom/lib/logger";
 import { prisma } from "@calcom/prisma";
 import type { EventType, Prisma } from "@calcom/prisma/client";
 import { CreationSource, SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
@@ -65,7 +67,10 @@ type InviteeMeeting = {
     periodCountCalendarDays?: boolean;
     minimumBookingNotice?: number;
     schedule?: { timeZone: string | null } | null;
-    owner?: { defaultScheduleId: number | null; schedules: Array<{ id: number; timeZone: string | null }> } | null;
+    owner?: {
+      defaultScheduleId: number | null;
+      schedules: Array<{ id: number; timeZone: string | null }>;
+    } | null;
     locations: Prisma.JsonValue | null;
   };
 
@@ -134,6 +139,11 @@ export class SpecificMeetingService {
     await this.resolveLocationValue(eventType.locations);
 
     await this.validateMeetingTimeWithinEventBounds({
+      eventType,
+      startTime: input.startTime,
+      timeZone: input.timeZone,
+    });
+    await this.validateMeetingTimeWithinAvailability({
       eventType,
       startTime: input.startTime,
       timeZone: input.timeZone,
@@ -595,8 +605,9 @@ export class SpecificMeetingService {
   }) {
     const eventTimeZone =
       input.eventType.schedule?.timeZone ??
-      input.eventType.owner?.schedules.find((schedule) => schedule.id === input.eventType.owner?.defaultScheduleId)
-        ?.timeZone;
+      input.eventType.owner?.schedules.find(
+        (schedule) => schedule.id === input.eventType.owner?.defaultScheduleId
+      )?.timeZone;
 
     await validateBookingTimeIsNotOutOfBounds(
       input.startTime.toISOString(),
@@ -615,6 +626,40 @@ export class SpecificMeetingService {
       eventTimeZone,
       logger
     );
+  }
+
+  private async validateMeetingTimeWithinAvailability(input: {
+    eventType: NonNullable<Awaited<ReturnType<SpecificMeetingRepository["findOwnedEventType"]>>>;
+    startTime: Date;
+    timeZone: string;
+  }) {
+    const availableSlotsService = getAvailableSlotsService();
+    const startOfDay = new Date(input.startTime);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(input.startTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const schedule = await availableSlotsService.getAvailableSlots({
+      input: {
+        eventTypeId: input.eventType.id,
+        startTime: startOfDay.toISOString(),
+        endTime: endOfDay.toISOString(),
+        timeZone: input.timeZone,
+      },
+    });
+
+    const isStartSlotAvailable = isTimeSlotAvailable({
+      scheduleData: schedule,
+      slotToCheckInIso: input.startTime.toISOString(),
+      quickAvailabilityChecks: [],
+    });
+
+    if (!isStartSlotAvailable) {
+      throw new ErrorWithCode(
+        ErrorCode.BadRequest,
+        "Specific meeting must be scheduled within the event type availability"
+      );
+    }
   }
 
   private resolveLocationValue(locations: Prisma.JsonValue | null) {

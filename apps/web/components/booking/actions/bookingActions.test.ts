@@ -1,19 +1,17 @@
-import { describe, it, expect } from "vitest";
-
 import { BookingStatus, SchedulingType } from "@calcom/prisma/enums";
-
+import { describe, expect, it } from "vitest";
 import {
-  getPendingActions,
-  getCancelEventAction,
-  getVideoOptionsActions,
-  getEditEventActions,
-  getAfterEventActions,
-  shouldShowPendingActions,
-  shouldShowEditActions,
-  shouldShowRecurringCancelAction,
-  isActionDisabled,
-  getActionLabel,
   type BookingActionContext,
+  getActionLabel,
+  getAfterEventActions,
+  getCancelEventAction,
+  getEditEventActions,
+  getPendingActions,
+  getVideoOptionsActions,
+  isActionDisabled,
+  shouldShowEditActions,
+  shouldShowPendingActions,
+  shouldShowRecurringCancelAction,
 } from "./bookingActions";
 
 const mockT = (key: string) => key;
@@ -352,6 +350,20 @@ describe("Booking Actions", () => {
 
       const addMembersAction = actions.find((a) => a.id === "add_members");
       expect(addMembersAction).toBeUndefined();
+    });
+
+    it("should allow organizers to reschedule multi-invitee specific meetings", () => {
+      const context = createMockContext({
+        booking: {
+          ...createMockContext().booking,
+          metadata: { specificMeetingInviteeCount: 2 },
+        },
+        isAttendee: false,
+      });
+      const actions = getEditEventActions(context);
+
+      expect(actions.find((a) => a.id === "reschedule")?.disabled).toBe(false);
+      expect(actions.find((a) => a.id === "reschedule_request")?.disabled).toBe(false);
     });
 
     it("should disable reschedule actions when rescheduling is disabled", () => {

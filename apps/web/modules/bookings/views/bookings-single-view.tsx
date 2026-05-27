@@ -89,6 +89,7 @@ const querySchema = z.object({
   rating: z.string().optional(),
   noShow: stringToBoolean,
   redirect_status: z.string().optional(),
+  error: z.string().optional(),
 });
 
 const useBrandColors = ({
@@ -131,6 +132,7 @@ export default function Success(props: PageProps) {
     noShow,
     rating,
     redirect_status,
+    error,
   } = querySchema.parse(routerQuery);
 
   const attendeeTimeZone = bookingInfo?.attendees.find((attendee) => attendee.email === email)?.timeZone;
@@ -236,6 +238,18 @@ export default function Success(props: PageProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (error !== "specific-meeting-organizer-reschedule-only") {
+      return;
+    }
+
+    showToast(t("specific_meeting_only_organizer_can_reschedule"), "error");
+
+    const nextSearchParams = new URLSearchParams(searchParams?.toString() ?? undefined);
+    nextSearchParams.delete("error");
+    router.replace(`${pathname}${nextSearchParams.toString() ? `?${nextSearchParams.toString()}` : ""}`);
+  }, [error, pathname, router, searchParams, t]);
 
   const sendFeedback = async (rating: string, comment: string) => {
     mutation.mutate({ bookingUid: bookingInfo.uid, rating: rateValue, comment: comment });

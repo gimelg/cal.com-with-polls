@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SpecificMeetingInviteeStatus, SpecificMeetingStatus } from "@calcom/prisma/enums";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createBookingMock = vi.fn();
 const handleCancelBookingMock = vi.fn();
 const sendSpecificMeetingBookingFailedEmailMock = vi.fn();
 const bookingUpdateMock = vi.fn();
+const getAvailableSlotsMock = vi.fn();
 
 vi.mock("@calcom/prisma", () => ({
   prisma: {
@@ -20,12 +21,19 @@ vi.mock("@calcom/features/bookings/di/RegularBookingService.container", () => ({
   }),
 }));
 
+vi.mock("@calcom/features/di/containers/AvailableSlots", () => ({
+  getAvailableSlotsService: () => ({
+    getAvailableSlots: getAvailableSlotsMock,
+  }),
+}));
+
 vi.mock("@calcom/features/bookings/lib/handleCancelBooking", () => ({
   default: (...args: unknown[]) => handleCancelBookingMock(...args),
 }));
 
 vi.mock("@calcom/emails/poll-email-service", () => ({
-  sendSpecificMeetingBookingFailedEmail: (...args: unknown[]) => sendSpecificMeetingBookingFailedEmailMock(...args),
+  sendSpecificMeetingBookingFailedEmail: (...args: unknown[]) =>
+    sendSpecificMeetingBookingFailedEmailMock(...args),
   sendSpecificMeetingConfirmationEmail: vi.fn(),
 }));
 
@@ -63,6 +71,11 @@ describe("SpecificMeetingService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     bookingUpdateMock.mockResolvedValue({ id: 222 });
+    getAvailableSlotsMock.mockResolvedValue({
+      slots: {
+        "2027-04-01": [{ time: futureStartTime.toISOString() }],
+      },
+    });
   });
 
   it("creates a meeting without creating a booking yet", async () => {
@@ -152,6 +165,14 @@ describe("SpecificMeetingService", () => {
       participants: [{ name: "Alex", email: "ALEX@example.com" }],
     });
 
+    expect(getAvailableSlotsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          eventTypeId: 100,
+          timeZone: "UTC",
+        }),
+      })
+    );
     expect(repository.createSpecificMeeting).toHaveBeenCalledWith(
       expect.objectContaining({
         organizerId: 10,
@@ -163,6 +184,41 @@ describe("SpecificMeetingService", () => {
     expect(createBookingMock).not.toHaveBeenCalled();
     expect(repository.attachBooking).not.toHaveBeenCalled();
     expect(result.invitees[0]?.responseUrl).toBe("/meeting/sm_1?token=token_1");
+  });
+
+  it("rejects meetings outside event type availability", async () => {
+    repository.findOwnedEventType.mockResolvedValue({
+      id: 100,
+      title: "1:1",
+      slug: "one-on-one",
+      length: 30,
+      locations: [],
+      userId: 10,
+      minimumBookingNotice: 0,
+      periodType: "UNLIMITED",
+      periodDays: null,
+      periodEndDate: null,
+      periodStartDate: null,
+      periodCountCalendarDays: false,
+      schedule: { timeZone: "UTC" },
+      owner: { defaultScheduleId: null, schedules: [] },
+    });
+    getAvailableSlotsMock.mockResolvedValue({ slots: {} });
+
+    await expect(
+      service.create({
+        organizerId: 10,
+        eventTypeId: 100,
+        title: "Planning",
+        description: undefined,
+        timeZone: "UTC",
+        startTime: futureStartTime,
+        endTime: futureEndTime,
+        participants: [{ name: "Alex", email: "alex@example.com" }],
+      })
+    ).rejects.toThrow("Specific meeting must be scheduled within the event type availability");
+
+    expect(repository.createSpecificMeeting).not.toHaveBeenCalled();
   });
 
   it("cancels the linked booking and meeting", async () => {
