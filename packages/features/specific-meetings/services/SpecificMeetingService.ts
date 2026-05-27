@@ -474,10 +474,10 @@ export class SpecificMeetingService {
       return;
     }
 
-    const hasAcceptedInvitee = meeting.invitees.some(
-      (currentInvitee) => currentInvitee.status === SpecificMeetingInviteeStatus.ACCEPTED
+    const hasRemainingInvitee = meeting.invitees.some(
+      (currentInvitee) => currentInvitee.status !== SpecificMeetingInviteeStatus.DECLINED
     );
-    if (hasAcceptedInvitee) {
+    if (hasRemainingInvitee) {
       return;
     }
 

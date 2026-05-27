@@ -5,6 +5,24 @@ import generateIcsFile, { GenerateIcsRole } from "../lib/generateIcsFile";
 import renderEmail from "../src/renderEmail";
 import OrganizerScheduledEmail from "./organizer-scheduled-email";
 
+const getAttendeeSummary = (calEvent: CalendarEvent) => {
+  const [firstAttendee, ...otherAttendees] = calEvent.attendees;
+
+  if (!firstAttendee) {
+    return "";
+  }
+
+  if (otherAttendees.length === 0) {
+    return firstAttendee.name;
+  }
+
+  if (otherAttendees.length === 1) {
+    return `${firstAttendee.name} and ${otherAttendees[0].name}`;
+  }
+
+  return `${firstAttendee.name} and ${otherAttendees.length} other attendees`;
+};
+
 export default class OrganizerRequestedToRescheduleEmail extends OrganizerScheduledEmail {
   private metadata: { rescheduleLink: string };
   constructor(calEvent: CalendarEvent, metadata: { rescheduleLink: string }) {
@@ -13,6 +31,7 @@ export default class OrganizerRequestedToRescheduleEmail extends OrganizerSchedu
   }
   protected async getNodeMailerPayload(): Promise<Record<string, unknown>> {
     const toAddresses = [this.calEvent.organizer.email];
+    const attendeeSummary = getAttendeeSummary(this.calEvent);
 
     return {
       icalEvent: generateIcsFile({
@@ -24,7 +43,7 @@ export default class OrganizerRequestedToRescheduleEmail extends OrganizerSchedu
       to: toAddresses.join(","),
       subject: `${this.t("rescheduled_event_type_subject", {
         eventType: this.calEvent.type,
-        name: this.calEvent.attendees[0].name,
+        name: attendeeSummary,
         date: this.getFormattedDate(),
       })}`,
       html: await renderEmail("OrganizerRequestedToRescheduleEmail", {
@@ -33,10 +52,10 @@ export default class OrganizerRequestedToRescheduleEmail extends OrganizerSchedu
       }),
       text: this.getTextBody(
         this.t("request_reschedule_title_organizer", {
-          attendee: this.calEvent.attendees[0].name,
+          attendee: attendeeSummary,
         }),
         this.t("request_reschedule_subtitle_organizer", {
-          attendee: this.calEvent.attendees[0].name,
+          attendee: attendeeSummary,
         })
       ),
     };
