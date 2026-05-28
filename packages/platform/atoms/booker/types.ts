@@ -7,7 +7,6 @@ import type {
   ApiErrorResponse,
   ApiSuccessResponse,
   ApiSuccessResponseWithoutData,
-  EmbedSearchParams,
 } from "@calcom/platform-types";
 import type React from "react";
 import type { UseCreateBookingInput } from "../hooks/bookings/useCreateBooking";
@@ -98,14 +97,14 @@ export type BookerPlatformWrapperAtomProps = Omit<
 export type BookerPlatformWrapperAtomPropsForIndividual = BookerPlatformWrapperAtomProps & {
   username: string | string[];
   isTeamEvent?: false;
-  embedSearchParams?: EmbedSearchParams;
+  embedSearchParams?: URLSearchParams;
 };
 
 export type BookerPlatformWrapperAtomPropsForTeam = BookerPlatformWrapperAtomProps & {
   username?: string | string[];
   isTeamEvent: true;
   teamId: number;
-  embedSearchParams?: EmbedSearchParams;
+  embedSearchParams?: URLSearchParams;
   rrHostSubsetIds?: number[];
 };
 

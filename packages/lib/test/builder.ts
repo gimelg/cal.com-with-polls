@@ -5,6 +5,7 @@ import { BookingStatus, CreationSource } from "@calcom/prisma/enums";
 import type { CalendarEvent, Person, VideoCallData } from "@calcom/types/Calendar";
 import { faker } from "@faker-js/faker";
 import type { TFunction } from "i18next";
+import { v4 as uuidv4 } from "uuid";
 
 export const buildVideoCallData = (callData?: Partial<VideoCallData>): VideoCallData => {
   return {

@@ -3,7 +3,6 @@
 import { useEventTypeForm } from "@calcom/atoms/event-types/hooks/useEventTypeForm";
 import { useHandleRouteChange } from "@calcom/atoms/event-types/hooks/useHandleRouteChange";
 import { useTabsNavigations } from "@calcom/atoms/event-types/hooks/useTabsNavigations";
-import { useOrgBranding } from "@calcom/features/ee/organizations/context/provider";
 import type { ChildrenEventType } from "@calcom/features/eventtypes/components/ChildrenEventTypeSelect";
 import type { EventTypeSetupProps } from "@calcom/features/eventtypes/lib/types";
 import { WEBSITE_URL } from "@calcom/lib/constants";
@@ -15,7 +14,6 @@ import type { RouterOutputs } from "@calcom/trpc/react";
 import { trpc } from "@calcom/trpc/react";
 import useMeQuery from "@calcom/trpc/react/hooks/useMeQuery";
 import { showToast } from "@calcom/ui/components/toast";
-import { revalidateTeamEventTypeCache } from "@calcom/web/app/(booking-page-wrapper)/team/[slug]/[type]/actions";
 import { revalidateEventTypeEditPage } from "@calcom/web/app/(use-page-wrapper)/event-types/[type]/actions";
 import { TRPCClientError } from "@trpc/react-query";
 import dynamic from "next/dynamic";
@@ -180,9 +178,9 @@ const EventTypeWeb = ({
   const { form, handleSubmit } = useEventTypeForm({ eventType, onSubmit: updateMutation.mutate });
   const slug = form.watch("slug") ?? eventType.slug;
 
-  const orgBranding = useOrgBranding();
+  const orgBranding = null as { id: number; fullDomain?: string; [key: string]: unknown } | null;
 
-  const bookerUrl = orgBranding ? orgBranding?.fullDomain : WEBSITE_URL;
+  const bookerUrl = orgBranding?.fullDomain ?? WEBSITE_URL;
   const eventOwnerUsername = eventType.users[0]?.username ?? user?.username ?? "";
   const permalink = `${bookerUrl}/${team ? `team/${team.slug}` : eventOwnerUsername}/${eventType.slug}`;
 

@@ -229,7 +229,6 @@ export class SpecificMeetingService {
           cancelledBy: input.organizerEmail,
         },
         actionSource: "WEBAPP",
-        impersonatedByUserUuid: null,
       });
     }
 
@@ -432,7 +431,6 @@ export class SpecificMeetingService {
         bookingData,
         bookingMeta: {
           userId: meeting.organizer.id,
-          impersonatedByUserUuid: null,
         },
       });
 
@@ -508,7 +506,6 @@ export class SpecificMeetingService {
         cancelledBy: meeting.organizer.email,
       },
       actionSource: "WEBAPP",
-      impersonatedByUserUuid: null,
     });
   }
 

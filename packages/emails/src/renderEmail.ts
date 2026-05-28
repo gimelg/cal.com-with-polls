@@ -4,11 +4,11 @@ async function renderEmail<K extends keyof typeof templates>(
   template: K,
   props: React.ComponentProps<(typeof templates)[K]>
 ) {
-  const Component = templates[template];
+  const Component = templates[template] as unknown as (
+    props: React.ComponentProps<(typeof templates)[K]>
+  ) => React.ReactElement;
   const ReactDOMServer = (await import("react-dom/server")).default;
   return (
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
     ReactDOMServer.renderToStaticMarkup(Component(props))
       // Remove `<RawHtml />` injected scripts
       .replace(/<script><\/script>/g, "")

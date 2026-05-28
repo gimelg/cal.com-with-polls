@@ -40,8 +40,6 @@ export { OrganizerRescheduledEmail } from "./OrganizerRescheduledEmail";
 export { OrganizerScheduledEmail } from "./OrganizerScheduledEmail";
 export { PollFinalizedEmail } from "./PollFinalizedEmail";
 export { PollInviteEmail } from "./PollInviteEmail";
-export { ProrationInvoiceEmail } from "./ProrationInvoiceEmail";
-export { ProrationReminderEmail } from "./ProrationReminderEmail";
 export { SlugReplacementEmail } from "./SlugReplacementEmail";
 export { SpecificMeetingBookingFailedEmail } from "./SpecificMeetingBookingFailedEmail";
 export { SpecificMeetingCancelledEmail } from "./SpecificMeetingCancelledEmail";

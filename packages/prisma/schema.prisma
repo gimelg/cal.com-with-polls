@@ -941,7 +941,7 @@ model Booking {
   expenseLogs            CreditExpenseLog[]
   report                 BookingReport?
   wrongAssignmentReports WrongAssignmentReport[]
-  finalizedFromPolls     Poll[]             @relation("poll_finalized_booking")
+  finalizedFromPolls     Poll[]                     @relation("poll_finalized_booking")
   specificMeeting        SpecificMeeting?
 
   // @@partial_index([reassignById])
