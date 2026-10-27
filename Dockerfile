@@ -34,6 +34,8 @@ ARG CSP_POLICY
 ## We need these variables as required by Next.js build to create rewrites
 ARG NEXT_PUBLIC_SINGLE_ORG_SLUG
 ARG ORGANIZATIONS_ENABLED
+# Next.js fixes NEXT_PUBLIC_ values at build time. This instance has one user: no signup page or API.
+ARG NEXT_PUBLIC_DISABLE_SIGNUP=true
 ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
   NEXT_PUBLIC_API_V2_URL=$NEXT_PUBLIC_API_V2_URL \
   NEXT_PUBLIC_LICENSE_CONSENT=$NEXT_PUBLIC_LICENSE_CONSENT \
@@ -46,6 +48,7 @@ ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
   CALENDSO_ENCRYPTION_KEY=${CALENDSO_ENCRYPTION_KEY} \
   NEXT_PUBLIC_SINGLE_ORG_SLUG=$NEXT_PUBLIC_SINGLE_ORG_SLUG \
   ORGANIZATIONS_ENABLED=$ORGANIZATIONS_ENABLED \
+  NEXT_PUBLIC_DISABLE_SIGNUP=$NEXT_PUBLIC_DISABLE_SIGNUP \
   NODE_OPTIONS=--max-old-space-size=${MAX_OLD_SPACE_SIZE} \
   BUILD_STANDALONE=true \
   CSP_POLICY=$CSP_POLICY
@@ -85,13 +88,23 @@ RUN scripts/replace-placeholder.sh http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER ${N
 
 FROM node:20 AS runner
 WORKDIR /calcom
-RUN corepack enable && corepack prepare yarn@4.12.0 --activate
+# Yarn in a shared folder, not root's home: the app runs as node (below), and must not download
+# Yarn at start (the infra repo's standby viewer has no internet).
+ENV COREPACK_HOME=/usr/local/share/corepack
+RUN corepack enable && corepack prepare yarn@4.12.0 --activate && chmod -R a+rX "$COREPACK_HOME"
 RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd wget && rm -rf /var/lib/apt/lists/*
-COPY --from=builder-two /calcom ./
+# Owned by node: start.sh rewrites the built files when NEXT_PUBLIC_WEBAPP_URL changes, and Next.js
+# writes its cache under apps/web/.next. The folder itself too (WORKDIR made it root's, and --chown
+# covers only what is copied): turbo creates /calcom/.turbo at start.
+COPY --from=builder-two --chown=node:node /calcom ./
+RUN chown node:node /calcom
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
   BUILT_NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
 ENV NODE_ENV=production
+# Not root: a hole in the app is then not root in the container (nor on the host, without user
+# namespaces).
+USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=30s --retries=5 \
   CMD wget --spider http://localhost:3000 || exit 1
