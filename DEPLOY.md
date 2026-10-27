@@ -48,14 +48,21 @@ git add packages/prisma/schema.prisma packages/prisma/migrations packages/prisma
 ### 1c) Build and push
 
 ```bash
-# Use this as your new default command:
-export TAG=polls-v14
+# Once per Mac (and after the cleanup below): a builder that can use the cache in GHCR (Docker's
+# default one can't). Needs `docker login ghcr.io` with a token that has write:packages.
+docker buildx create --name calcom-builder --use
+# Use this as your new default command. A new tag every time: GHCR already has polls-v1 to
+# v11, v13 and v14.
+export TAG=polls-v15
 export CACHE_REF=ghcr.io/gimelg/calcom-custom:buildcache-polls-v1
 docker buildx build --platform linux/amd64 \
   --cache-from type=registry,ref=$CACHE_REF \
   --cache-to type=registry,ref=$CACHE_REF,mode=max \
   -t ghcr.io/gimelg/calcom-custom:$TAG \
   --push .
+# Afterwards, free the Mac's disk (the builder keeps ~35 GB; the cache is also in GHCR, so the next
+# build downloads what it needs). Then create the builder again before the next build (above).
+docker buildx rm calcom-builder
 # Then keep a separate “clean” command for occasional use:
 docker buildx build --platform linux/amd64 --pull --no-cache \
   -t ghcr.io/gimelg/calcom-custom:$TAG \

@@ -94,8 +94,10 @@ ENV COREPACK_HOME=/usr/local/share/corepack
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate && chmod -R a+rX "$COREPACK_HOME"
 RUN apt-get update && apt-get install -y --no-install-recommends netcat-openbsd wget && rm -rf /var/lib/apt/lists/*
 # Owned by node: start.sh rewrites the built files when NEXT_PUBLIC_WEBAPP_URL changes, and Next.js
-# writes its cache under apps/web/.next.
+# writes its cache under apps/web/.next. The folder itself too (WORKDIR made it root's, and --chown
+# covers only what is copied): turbo creates /calcom/.turbo at start.
 COPY --from=builder-two --chown=node:node /calcom ./
+RUN chown node:node /calcom
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL \
   BUILT_NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
